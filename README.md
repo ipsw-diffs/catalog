@@ -44,10 +44,11 @@ Full comparison and integrity details are in the version browser below.
 </details>
 
 <details>
-<summary><strong>iOS 26</strong> · 58 diffs</summary>
+<summary><strong>iOS 26</strong> · 59 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
+| `iPhone18,1` | [26.6.1 (23G83) → 26.6.2 (23G90)](https://github.com/ipsw-diffs/ios-26/blob/bc67542c81f38b0fe1d1aa93547cc1dc97be11e7/diffs/26_6_1_23G83_vs_26_6_2_23G90/README.md) | `d3cf9acd0e41` · 7 files · 4,051 bytes · [manifest](https://github.com/ipsw-diffs/ios-26/blob/bc67542c81f38b0fe1d1aa93547cc1dc97be11e7/manifests/26_6_1_23G83_vs_26_6_2_23G90.json) |
 | `iPhone18,1` | [26.6.1 RC (23G82) → 26.6.1 (23G83)](https://github.com/ipsw-diff/ios-26/blob/d335308a1bd7d82e9daaad32066e0de42fca3036/diffs/26_6_1_23G82_vs_26_6_1_23G83/README.md) | `d89f158e2289` · 9 files · 8,150 bytes · [manifest](https://github.com/ipsw-diff/ios-26/blob/d335308a1bd7d82e9daaad32066e0de42fca3036/manifests/26_6_1_23G82_vs_26_6_1_23G83.json) |
 | `iPhone18,1` | [26.6 (23G71) → 26.6.1 RC (23G82)](https://github.com/ipsw-diff/ios-26/blob/181d2d99f2d683c3e4df8a62949568c109785dc1/diffs/26_6_23G71_vs_26_6_1_23G82/README.md) | `e33ba065ee13` · 383 files · 1,692,861 bytes · [manifest](https://github.com/ipsw-diff/ios-26/blob/181d2d99f2d683c3e4df8a62949568c109785dc1/manifests/26_6_23G71_vs_26_6_1_23G82.json) |
 | `iPhone18,1` | [26.6 beta 5 (23G5065a) → 26.6 (23G71)](https://github.com/ipsw-diff/ios-26/blob/181d2d99f2d683c3e4df8a62949568c109785dc1/diffs/26_6_23G5065a_vs_26_6_23G71/README.md) | `9b85ab857cf9` · 5,051 files · 5,442,837 bytes · [manifest](https://github.com/ipsw-diff/ios-26/blob/181d2d99f2d683c3e4df8a62949568c109785dc1/manifests/26_6_23G5065a_vs_26_6_23G71.json) |

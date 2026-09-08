@@ -1701,6 +1701,16 @@
       "source_path": "osFiles/iOS/23x - 26.x/23G83.json"
     },
     {
+      "beta": false,
+      "build": "23G90",
+      "channel": "release",
+      "display_version": "26.6.2",
+      "platform": "iOS",
+      "rc": false,
+      "released": "2026-09-08",
+      "source_path": "osFiles/iOS/23x - 26.x/23G90.json"
+    },
+    {
       "beta": true,
       "build": "24A5355q",
       "channel": "beta",
@@ -2163,7 +2173,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "commit": "7bc31cfbc25288bb0466f5af26aadca21aa63a82",
+    "commit": "5e05beef14cf1410eb97e660381f90d9e1f83567",
     "repository": "https://github.com/littlebyteorg/appledb"
   }
 }
