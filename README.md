@@ -13,9 +13,9 @@ Full comparison and integrity details are in the version browser below.
 
 ### iOS 27
 
+- [27.2 beta (`24B5084k`)](https://github.com/ipsw-diffs/ios-27/blob/4c6365c2a47e18ff126ba1bd9743c73fa52d2e40/diffs/27_0_24A437_vs_27_2_24B5084k/README.md) ← 27.0 (`24A437`)
 - [27.0 (`24A437`)](https://github.com/ipsw-diffs/ios-27/blob/3da0ca2101cdbfd7da7fa68be03f1b01b4f2a77e/diffs/27_0_24A435_vs_27_0_24A437/README.md) ← 27.0 RC (`24A435`)
 - [27.0 RC (`24A435`)](https://github.com/ipsw-diffs/ios-27/blob/6b133c6d62b5a139929c222142e45a6a821dcfec/diffs/27_0_24A5430a_vs_27_0_24A435/README.md) ← 27.0 beta 8 (`24A5430a`)
-- [27.0 beta 8 (`24A5430a`)](https://github.com/ipsw-diffs/ios-27/blob/d7f4a0637772bc805c77b33fb540b0ef5599ed77/diffs/27_0_24A5424a_vs_27_0_24A5430a/README.md) ← 27.0 beta 7 (`24A5424a`)
 
 ### macOS 27
 
@@ -28,10 +28,11 @@ Full comparison and integrity details are in the version browser below.
 ### iOS
 
 <details>
-<summary><strong>iOS 27</strong> · 10 diffs</summary>
+<summary><strong>iOS 27</strong> · 11 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
+| `iPhone18,1` | [27.0 (24A437) → 27.2 beta (24B5084k)](https://github.com/ipsw-diffs/ios-27/blob/4c6365c2a47e18ff126ba1bd9743c73fa52d2e40/diffs/27_0_24A437_vs_27_2_24B5084k/README.md) | `751bd2ebc025` · 3,964 files · 91,979,309 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/4c6365c2a47e18ff126ba1bd9743c73fa52d2e40/manifests/27_0_24A437_vs_27_2_24B5084k.json) |
 | `iPhone18,1` | [27.0 RC (24A435) → 27.0 (24A437)](https://github.com/ipsw-diffs/ios-27/blob/3da0ca2101cdbfd7da7fa68be03f1b01b4f2a77e/diffs/27_0_24A435_vs_27_0_24A437/README.md) | `9b36f918e09f` · 56 files · 29,200 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/3da0ca2101cdbfd7da7fa68be03f1b01b4f2a77e/manifests/27_0_24A435_vs_27_0_24A437.json) |
 | `iPhone18,1` | [27.0 beta 8 (24A5430a) → 27.0 RC (24A435)](https://github.com/ipsw-diffs/ios-27/blob/6b133c6d62b5a139929c222142e45a6a821dcfec/diffs/27_0_24A5430a_vs_27_0_24A435/README.md) | `e83b837ea60d` · 4,217 files · 15,032,330 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/6b133c6d62b5a139929c222142e45a6a821dcfec/manifests/27_0_24A5430a_vs_27_0_24A435.json) |
 | `iPhone18,1` | [27.0 beta 7 (24A5424a) → 27.0 beta 8 (24A5430a)](https://github.com/ipsw-diffs/ios-27/blob/d7f4a0637772bc805c77b33fb540b0ef5599ed77/diffs/27_0_24A5424a_vs_27_0_24A5430a/README.md) | `b1239b320a52` · 49 files · 77,486 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/d7f4a0637772bc805c77b33fb540b0ef5599ed77/manifests/27_0_24A5424a_vs_27_0_24A5430a.json) |
