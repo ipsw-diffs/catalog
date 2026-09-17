@@ -104,11 +104,16 @@ jobs:
             --os "$PLATFORM" \
             --device "$DEVICE" \
             --version "$MAJOR." \
-            --urls \
+            --type ipsw \
             --json \
             --no-color > "$RUNNER_TEMP/ipsw-sources.json"
-          jq --exit-status 'type == "array" and length > 0' \
-            "$RUNNER_TEMP/ipsw-sources.json" >/dev/null
+          if ! jq --exit-status '
+            type == "object" and .schema_version == 1 and
+            (.releases | type == "array" and length > 0)
+          ' "$RUNNER_TEMP/ipsw-sources.json" >/dev/null; then
+            echo 'Expected nonempty ipsw AppleDB schema_version=1 releases envelope' >&2
+            exit 1
+          fi
           appledb_commit="$(git -C "$config_dir/appledb" rev-parse HEAD)"
           [[ "$appledb_commit" =~ ^[0-9a-f]{40}$ ]]
           printf '%s\n' "$appledb_commit" > "$RUNNER_TEMP/appledb-commit"

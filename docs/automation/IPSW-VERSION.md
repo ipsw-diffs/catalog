@@ -16,6 +16,18 @@ Logs contain the resolved version and checksum. Generated provenance retains the
 actual `ipsw version` output, including its build commit. Existing reports are not
 regenerated merely because a new tool version becomes available.
 
+## AppleDB JSON contract
+
+Discovery and generation request full IPSWs with `--type ipsw --json` and expect
+the schema-version-1 release envelope introduced in v3.1.721, not the legacy
+top-level source array. The parser checks each selected release's metadata and
+artifact device, active URL, SHA-256, and size against the independently pinned
+AppleDB checkout. Unsupported schemas and incomplete selected sources fail
+closed. Nullable fields on unselected historical artifacts do not block discovery.
+
+This changes the CLI inventory contract, not the per-shard `track.json` schema.
+Keep reviewed track devices and anchors unchanged when rolling out this fix.
+
 ## Rollout
 
 The shard workflows pin these reusable catalog workflows to a commit SHA.

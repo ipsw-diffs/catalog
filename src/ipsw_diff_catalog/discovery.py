@@ -416,7 +416,48 @@ def _release_from_blob(
     )
 
 
-def _observed_sources(path: Path) -> tuple[JsonObject, ...]:
+@dataclass(frozen=True)
+class ObservedSource:
+    release: JsonObject
+    artifact: JsonObject
+    context: str
+
+    def select(self, device: str) -> tuple[ReleaseMetadata, FirmwareSource]:
+        channel = self.release.get("channel")
+        if channel not in ("release", "beta", "rc"):
+            raise CatalogError(f"{self.context}.channel has an unsupported value")
+        metadata = ReleaseMetadata.from_object(
+            {
+                "version": self.release.get("version"),
+                "build": self.release.get("build"),
+                "released": self.release.get("release_date"),
+                "beta": channel == "beta",
+                "rc": channel == "rc",
+            },
+            self.context,
+        )
+        artifact = self.artifact
+        if (
+            artifact.get("source_type") != "ipsw"
+            or artifact.get("delivery") != "full"
+            or artifact.get("prerequisite_builds") != []
+        ):
+            raise CatalogError(f"{self.context} must describe a full IPSW without prerequisites")
+        source = FirmwareSource.from_object(
+            {
+                "type": "ipsw",
+                "deviceMap": artifact.get("devices"),
+                "links": [{"url": artifact.get("active_url"), "active": True}],
+                "hashes": {"sha2-256": artifact.get("sha256")},
+                "size": artifact.get("size"),
+            },
+            device,
+            self.context,
+        )
+        return metadata, source
+
+
+def _observed_sources(path: Path, platform: str) -> tuple[ObservedSource, ...]:
     try:
         raw = path.read_bytes()
     except OSError as error:
@@ -425,42 +466,45 @@ def _observed_sources(path: Path) -> tuple[JsonObject, ...]:
         value: object = json.loads(raw)
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
         raise CatalogError(f"ipsw source inventory is not valid JSON: {path}") from error
-    sources = tuple(
-        _object(item, f"ipsw sources[{index}]")
-        for index, item in enumerate(_array(value, "ipsw sources"))
-    )
+    envelope = _object(value, "ipsw source inventory")
+    if type(envelope.get("schema_version")) is not int or envelope["schema_version"] != 1:
+        raise CatalogError("ipsw source inventory schema_version must be 1")
+    sources: list[ObservedSource] = []
+    for index, item in enumerate(_array(envelope.get("releases"), "ipsw releases")):
+        context = f"ipsw releases[{index}]"
+        release = _object(item, context)
+        if release.get("os") != platform:
+            raise CatalogError(f"{context}.os differs from the track policy")
+        _string(release.get("build"), f"{context}.build", _BUILD)
+        for artifact_index, artifact in enumerate(_array(release.get("artifacts"), context)):
+            artifact_context = f"{context}.artifacts[{artifact_index}]"
+            sources.append(
+                ObservedSource(release, _object(artifact, artifact_context), artifact_context)
+            )
     if not sources:
         raise CatalogError("ipsw returned no sources for the reviewed selector")
-    return sources
-
-
-def _active_urls(value: JsonObject, context: str) -> tuple[str, ...]:
-    links = _array(value.get("links"), f"{context}.links")
-    urls: list[str] = []
-    for index, item in enumerate(links):
-        link = _object(item, f"{context}.links[{index}]")
-        if _boolean(link.get("active", False), f"{context}.links[{index}].active"):
-            urls.append(_string(link.get("url"), f"{context}.links[{index}].url"))
-    return tuple(urls)
+    return tuple(sources)
 
 
 def _require_ipsw_observation(
     candidate: AppleDBCandidate,
-    observed: tuple[JsonObject, ...],
+    observed: tuple[ObservedSource, ...],
     device: str,
 ) -> AppleDBRelease:
     release = candidate.select(device)
     matches = [
-        (index, value)
-        for index, value in enumerate(observed)
-        if release.source.url in _active_urls(value, f"ipsw sources[{index}]")
+        value
+        for value in observed
+        if value.release["build"] == release.metadata.build
+        and value.artifact.get("active_url") == release.source.url
     ]
     if len(matches) != 1:
         raise CatalogError(
             f"ipsw source coverage for {release.metadata.build} differs: found {len(matches)}"
         )
-    index, value = matches[0]
-    parsed = FirmwareSource.from_object(value, device, f"ipsw sources[{index}]")
+    metadata, parsed = matches[0].select(device)
+    if metadata != release.metadata:
+        raise CatalogError(f"ipsw release metadata differs for build {release.metadata.build}")
     if parsed != release.source:
         raise CatalogError(f"ipsw source facts differ for build {release.metadata.build}")
     return release
@@ -656,7 +700,7 @@ def _plan_candidate_edges(
 def _select_releases(
     candidates: tuple[AppleDBCandidate, ...],
     builds: frozenset[str],
-    observed: tuple[JsonObject, ...],
+    observed: tuple[ObservedSource, ...],
     device: str,
 ) -> dict[str, AppleDBRelease]:
     selected: dict[str, AppleDBRelease] = {}
@@ -681,7 +725,7 @@ def discover(
     repo = ensure_repository(appledb_repo)
     require_origin(repo, _APPLEDB_REPOSITORY, "AppleDB")
     commit = resolve_commit(repo, appledb_commit)
-    observed = _observed_sources(ipsw_sources)
+    observed = _observed_sources(ipsw_sources, policy.appledb_platform)
     candidates = _appledb_candidates(repo, commit, policy)
     known_builds, manifest_edges = _manifest_inventory(manifests_dir, policy)
 

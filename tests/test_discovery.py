@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
-from ipsw_diff_catalog.discovery import TrackPolicy, discover
+from ipsw_diff_catalog.discovery import TrackPolicy, _observed_sources, discover
 from ipsw_diff_catalog.model import CatalogError, JsonObject
 from tests.helpers import commit_all, git, init_repo
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _APPLEDB_ORIGIN = "https://github.com/littlebyteorg/appledb.git"
 
@@ -149,6 +146,42 @@ class _Fixture:
     sources: Path
 
 
+def _envelope(
+    releases: tuple[_Release, ...], sources: tuple[JsonObject, ...], platform: str
+) -> JsonObject:
+    records: list[JsonObject] = []
+    for source in sources:
+        links = source["links"]
+        hashes = source["hashes"]
+        assert isinstance(links, list)
+        assert isinstance(links[0], dict)
+        assert isinstance(hashes, dict)
+        url = str(links[0]["url"])
+        release = next(release for release in releases if f"_{release.build}_" in url)
+        records.append(
+            {
+                "os": platform,
+                "version": release.version,
+                "build": release.build,
+                "release_date": release.released,
+                "channel": "beta" if release.beta else "rc" if release.rc else "release",
+                "artifacts": [
+                    {
+                        "source_type": source["type"],
+                        "delivery": "full",
+                        "prerequisite_builds": [],
+                        "devices": source["deviceMap"],
+                        "active_url": url,
+                        "sha256": hashes["sha2-256"],
+                        "sha1": None,
+                        "size": source["size"],
+                    }
+                ],
+            }
+        )
+    return {"schema_version": 1, "releases": records}
+
+
 def _fixture(  # noqa: PLR0913
     tmp_path: Path,
     releases: tuple[_Release, ...] = (_BASELINE,),
@@ -177,7 +210,12 @@ def _fixture(  # noqa: PLR0913
         )
     commit = commit_all(appledb, "AppleDB fixture")
     sources = tmp_path / "ipsw-sources.json"
-    _write_json(sources, observed or tuple(_source(release, device=device) for release in releases))
+    source_rows = (
+        observed
+        if observed is not None
+        else tuple(_source(release, device=device) for release in releases)
+    )
+    _write_json(sources, _envelope(releases, source_rows, appledb_platform))
     return _Fixture(policy_path, manifests, appledb, commit, sources)
 
 
@@ -262,7 +300,7 @@ def test_discover_keeps_parallel_version_trains_separate(tmp_path: Path) -> None
         ("ios-12", "iOS", "iOS", "iPhone7,1", 12),
         ("ios-17", "iOS", "iPadOS", "iPad7,5", 17),
         ("macos-15", "macOS", "macOS", "Mac16,1", 15),
-        ("macos-27", "macOS", "macOS", "Mac17,6", 27),
+        ("macos-27", "macOS", "macOS", "Mac18,5", 27),
     ],
 )
 def test_policy_accepts_reviewed_ios_ipados_and_macos_routes(
@@ -455,3 +493,105 @@ def test_discover_rejects_substituted_appledb_origin(tmp_path: Path) -> None:
 
     with pytest.raises(CatalogError, match="AppleDB origin differs"):
         _discover(fixture)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [],
+        {},
+        {"schema_version": 2},
+        {"schema_version": True},
+        {"schema_version": 1, "releases": []},
+        {"schema_version": 1, "releases": {}},
+    ],
+)
+def test_discover_rejects_invalid_inventory_envelope(tmp_path: Path, value: object) -> None:
+    fixture = _fixture(tmp_path)
+    _write_json(fixture.sources, value)
+    with pytest.raises(CatalogError):
+        _discover(fixture)
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    [
+        ("release", "os", "macOS"),
+        ("release", "build", "OTHER"),
+        ("release", "version", "27.0 beta 4"),
+        ("release", "release_date", "2026-08-11"),
+        ("release", "release_date", None),
+        ("release", "channel", "release"),
+        ("release", "channel", []),
+        ("release", "artifacts", []),
+        ("artifact", "source_type", "ota"),
+        ("artifact", "delivery", "delta"),
+        ("artifact", "prerequisite_builds", ["A0"]),
+        ("artifact", "devices", ["Other1,1"]),
+        ("artifact", "active_url", None),
+        ("artifact", "active_url", "https://example.com/test.ipsw"),
+        ("artifact", "sha256", None),
+        ("artifact", "sha256", "f" * 64),
+        ("artifact", "size", None),
+        ("artifact", "size", 0),
+        ("artifact", "size", True),
+        ("artifact", "size", 42),
+    ],
+)
+def test_discover_rejects_selected_envelope_mutation(
+    tmp_path: Path, section: str, field: str, value: object
+) -> None:
+    fixture = _fixture(tmp_path)
+    envelope = json.loads(fixture.sources.read_text())
+    release = envelope["releases"][0]
+    target = release if section == "release" else release["artifacts"][0]
+    target[field] = value
+    _write_json(fixture.sources, envelope)
+    with pytest.raises(CatalogError):
+        _discover(fixture)
+
+
+def test_discover_rejects_duplicate_artifact(tmp_path: Path) -> None:
+    fixture = _fixture(tmp_path)
+    envelope = json.loads(fixture.sources.read_text())
+    artifacts = envelope["releases"][0]["artifacts"]
+    artifacts.append(artifacts[0])
+    _write_json(fixture.sources, envelope)
+    with pytest.raises(CatalogError, match="found 2"):
+        _discover(fixture)
+
+
+def test_discover_allows_nullable_unselected_history(tmp_path: Path) -> None:
+    historical = _Release("27.0 beta 4", "A0", "2026-08-03", beta=True)
+    fixture = _fixture(tmp_path, (historical, _BASELINE))
+    envelope = json.loads(fixture.sources.read_text())
+    artifact = envelope["releases"][0]["artifacts"][0]
+    for key in ("active_url", "sha256", "sha1", "size"):
+        artifact[key] = None
+    _write_json(fixture.sources, envelope)
+    assert _discover(fixture).status == "current"
+
+
+def test_parse_captured_v3721_macos_inventory() -> None:
+    # Unmodified CLI output; AppleDB 5e2fdf77bdf8b44bb6d1696cde033c793ebf06d0.
+    path = Path(__file__).parent / "fixtures/appledb-v3.1.721-macos27.json"
+    sources = _observed_sources(path, "macOS")
+    expected_count = 2
+    assert len(sources) == expected_count
+    metadata, source = sources[1].select("Mac18,5")
+    assert metadata.to_object() == {
+        "version": "27.0",
+        "build": "26A428",
+        "released": "2026-09-14T00:00:00Z",
+        "beta": False,
+        "rc": False,
+    }
+    assert source.input == "UniversalMac_27.0_26A428_Restore.ipsw"
+    assert source.sha256 == "2a5d3c695d501022b7fad9adaffcf2627bcb867d993fb5662dcd41bac99a2836"
+    release_size = 26626436228
+    assert source.size == release_size
+    beta, beta_source = sources[0].select("Mac18,5")
+    assert beta.beta is True
+    assert beta.build == "26B5086k"
+    beta_size = 26538648422
+    assert beta_source.size == beta_size
