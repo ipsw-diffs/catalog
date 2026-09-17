@@ -341,6 +341,7 @@ jobs:
           output="$RUNNER_TEMP/generated"
           mkdir -p "$output"
           ipsw diff \
+            --device "$DEVICE" \
             --title "$PREVIOUS_VERSION ($PREVIOUS_BUILD) .vs $NEXT_VERSION ($NEXT_BUILD)" \
             --output "$output" \
             --markdown \
