@@ -65,20 +65,10 @@ jobs:
           path: ${{ runner.temp }}/ipsw-config/appledb
           key: appledb-v2-${{ runner.os }}
 
-      - name: Install pinned ipsw
+      - name: Install latest stable ipsw (checksum verified)
         env:
-          IPSW_URL: https://github.com/blacktop/ipsw/releases/download/v3.1.708/ipsw_3.1.708_linux_x86_64.tar.gz
-          IPSW_SHA256: 75e697a302a39ac8dc3c9a5a7d5d56b9389d52a9761d5643634e0de7f396cf3c
-        run: |
-          set -euo pipefail
-          archive="$RUNNER_TEMP/ipsw.tar.gz"
-          install_dir="$RUNNER_TEMP/ipsw-bin"
-          curl --fail --location --silent --show-error --output "$archive" "$IPSW_URL"
-          printf '%s  %s\n' "$IPSW_SHA256" "$archive" | sha256sum --check --strict
-          mkdir -p "$install_dir"
-          tar -xzf "$archive" -C "$install_dir" ipsw
-          printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
-          "$install_dir/ipsw" version
+          GH_TOKEN: ${{ github.token }}
+        run: bash catalog/scripts/install-latest-ipsw.sh
 
       - name: Resolve reviewed track selector
         id: selector
