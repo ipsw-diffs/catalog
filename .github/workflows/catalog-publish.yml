@@ -269,7 +269,7 @@ jobs:
             echo
             printf -- "- \`AppleDB\`: \`%s\`\n" "$APPLEDB_COMMIT"
             echo
-            echo 'The commit is unsigned. Merge and announcement remain manual.'
+            echo 'The commit is unsigned. Merge remains manual; merging announces the new entries.'
           } > "$RUNNER_TEMP/pull-request.md"
           printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
 

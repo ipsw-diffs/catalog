@@ -1,0 +1,4 @@
+# Enable required Code Owner reviews on main for these rules to block unreviewed merges.
+/.github/CODEOWNERS @blacktop
+/.github/workflows/ @blacktop
+/social/ @blacktop

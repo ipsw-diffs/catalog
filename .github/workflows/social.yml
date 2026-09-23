@@ -1,0 +1,192 @@
+name: Social publisher
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - catalog.json
+  schedule:
+    - cron: "41 * * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: publish posts new entries; dry-run renders one entry and posts nothing
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - publish
+          - bootstrap
+      entry_id:
+        description: Catalog ID to render in dry-run mode
+        type: string
+        required: false
+
+permissions: {}
+
+concurrency:
+  group: ipsw-diff-social-publisher
+  cancel-in-progress: false
+
+env:
+  # blacktop/xpost, pinned; bump deliberately after a green `X live check` there.
+  XPOST_COMMIT: 3ce9d4d00186bf0adddf2ca2847888030dc89741
+  PUBLISH_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'publish' }}
+
+jobs:
+  check:
+    name: Check for new entries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - name: Require default-branch event
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$DISPATCH_REF" != refs/heads/main ]]; then
+            echo "social publication must run from main, got $DISPATCH_REF" >&2
+            exit 1
+          fi
+
+      - name: Checkout publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: social
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          enable-cache: true
+          cache-dependency-glob: social/uv.lock
+
+      - name: Install locked dependencies
+        run: uv sync --project social --locked --no-dev
+
+      - name: Look for work
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$PUBLISH_MODE" != publish ]]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          result=$(uv run --project social --locked --no-dev ipsw-diff-social --mode check)
+          echo "$result"
+          case "$result" in
+            has_work=true) echo 'run=true' >> "$GITHUB_OUTPUT" ;;
+            has_work=false) echo 'run=false' >> "$GITHUB_OUTPUT" ;;
+            *) echo "unexpected check output: $result" >&2; exit 1 ;;
+          esac
+
+  publish:
+    name: Publish new entries
+    needs: check
+    if: needs.check.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Restricted to main, which requires Code Owner review; see social/README.md.
+    environment: social
+    permissions:
+      contents: read
+      issues: write # de-duplication state lives in one machine-managed issue
+    steps:
+      - name: Checkout publisher
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: social
+          persist-credentials: false
+
+      - name: Checkout xpost
+        if: env.PUBLISH_MODE != 'bootstrap'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: blacktop/xpost
+          ref: ${{ env.XPOST_COMMIT }}
+          path: xpost
+          persist-credentials: false
+
+      - name: Build xpost
+        if: env.PUBLISH_MODE != 'bootstrap'
+        run: |
+          set -euo pipefail
+          swift build -c release --package-path xpost
+          echo "XPOST=$(swift build -c release --package-path xpost --show-bin-path)/xpost" >> "$GITHUB_ENV"
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        if: env.PUBLISH_MODE == 'publish'
+        with:
+          package_json_file: xpost/helper/package.json
+
+      - name: Build the X helper
+        if: env.PUBLISH_MODE == 'publish'
+        run: |
+          set -euo pipefail
+          pnpm --dir xpost/helper install --frozen-lockfile
+          pnpm --dir xpost/helper exec playwright install --with-deps chromium
+          pnpm --dir xpost/helper build
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          # Do not restore executable dependency caches written by unreviewed jobs.
+          enable-cache: false
+
+      - name: Install locked dependencies
+        run: uv sync --project social --locked --no-dev
+
+      - name: Run the publisher
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ENTRY_ID: ${{ inputs.entry_id || '' }}
+          # Credentials only reach publish runs.
+          XPOST_TWITTER_USER: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_TWITTER_USER || '' }}
+          XPOST_TWITTER_ACCOUNT_ID: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_TWITTER_ACCOUNT_ID || '' }}
+          XPOST_TWITTER_STATE_B64: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_TWITTER_STATE_B64 || '' }}
+          XPOST_MASTODON_SERVER: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_MASTODON_SERVER || '' }}
+          XPOST_MASTODON_ACCESS_TOKEN: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_MASTODON_ACCESS_TOKEN || '' }}
+          XPOST_BLUESKY_HANDLE: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_BLUESKY_HANDLE || '' }}
+          XPOST_BLUESKY_APP_PASSWORD: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_BLUESKY_APP_PASSWORD || '' }}
+        run: |
+          set -euo pipefail
+          umask 077
+          session_dir=$(mktemp -d)
+          trap 'rm -rf "$session_dir"' EXIT
+          args=(--mode "$PUBLISH_MODE" --output-dir "$RUNNER_TEMP/social")
+          case "$PUBLISH_MODE" in
+            dry-run) args+=(--xpost "$XPOST" --entry-id "$ENTRY_ID") ;;
+            publish)
+              args+=(--xpost "$XPOST")
+              if [[ -z "$XPOST_TWITTER_STATE_B64" ]]; then
+                echo "Set the social secret XPOST_TWITTER_STATE_B64 from a fresh exported session." >&2
+                exit 1
+              fi
+              printf '%s' "$XPOST_TWITTER_STATE_B64" | base64 --decode > "$session_dir/state.json"
+              export XPOST_TWITTER_STATE_FILE="$session_dir/state.json"
+              export XPOST_TWITTER_HELPER="$GITHUB_WORKSPACE/xpost/helper"
+              ;;
+          esac
+          unset XPOST_TWITTER_STATE_B64
+          env -u XPOST_TWITTER_PASSWORD \
+            uv run --project social --locked --no-dev ipsw-diff-social "${args[@]}"
+
+      - name: Upload dry-run preview
+        if: env.PUBLISH_MODE == 'dry-run'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ipsw-diff-social-preview
+          path: ${{ runner.temp }}/social/*.jpg
+          if-no-files-found: warn
+          retention-days: 7

@@ -402,7 +402,7 @@ def render_readme(
             "```",
             "",
             "[Automation](docs/AUTOMATION.md) defines the separately gated migration,",
-            "shard-generation, catalog-publication, and X-announcement transitions.",
+            "shard-generation, catalog-publication, and social-announcement transitions.",
             "",
         ]
     )

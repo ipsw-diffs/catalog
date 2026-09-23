@@ -116,32 +116,37 @@ opens one ready pull request. It cannot overwrite a generated branch, merge,
 or announce. Pull-request-triggered checks created with `GITHUB_TOKEN` still
 require manual approval by a repository writer.
 
-## X announcement transition
+## Social announcement transition
 
-X delivery will be a third PR and remains disabled until an account and app are
-ready. The workflow will run only for newly added IDs in a merged `catalog.json`;
-changed or removed entries fail closed. It will use an `x-production` GitHub
-environment and the official `POST /2/tweets` endpoint with user-context OAuth.
+Merging a catalog PR announces its new entries. The
+[social publisher](../social/README.md) posts each newly added ID in `catalog.json`
+to X, Mastodon and Bluesky through [xpost][xpost], built from a pinned commit.
+Changed or removed entries fail closed before additions are queued or the saved
+catalog revision advances. Unsupported catalog/entry schema versions also fail
+closed during initialization and explicit bootstrap. Only the publishing job enters
+the `social` environment that holds the account credentials; a read-only check job
+decides whether it runs.
 
-Duplicate prevention must be durable:
+Publishing is unattended, so `main` is the trust boundary. The environment accepts
+only `main`, and `main` requires Code Owner review for publisher code, workflows and
+CODEOWNERS, with no bypass. Anyone who can land a change on `main` can read the
+credentials, so write and admin access stay limited to the account owners.
 
-1. Serialize delivery with one non-canceling concurrency group.
-2. Atomically create a `refs/tags/announce/x/pending/ID` marker before calling X.
-3. If either a pending or sent marker already exists, stop for review.
-4. After a successful 201 response, record the Post ID in a GitHub issue ledger,
-   create `refs/tags/announce/x/sent/ID`, then remove the pending marker.
-5. If the process fails after posting, the pending marker blocks automatic retry
-   and therefore blocks accidental duplicate Posts.
+Duplicate prevention is durable:
 
-The account setup must follow [X's automation requirements][x-guidelines]: label
-the account as automated, disclose the bot and operator in its bio, link a
-human-managed account, use only the official API, and avoid unsolicited mentions
-or engagement automation. Posting requires an approved developer app and an
-OAuth 1.0a or OAuth 2.0 PKCE user token; app-only bearer tokens cannot post.
+1. One non-canceling concurrency group serializes every run.
+2. A machine-managed GitHub issue records, per entry and per network, what is
+   queued, pending and posted.
+3. Before xpost runs, the entry is saved as pending on every network it still
+   needs. A network moves to posted only after xpost confirms it.
+4. Pending entries are never retried automatically: xpost can't always tell
+   whether X published a post it didn't confirm. A person checks the account and
+   edits the issue, and a requeued entry posts only to networks still missing.
 
-X currently documents pay-per-use pricing, including a higher write price for
-content containing a URL. Configure a low spending limit before enabling the
-environment and recheck [current pricing][x-pricing] at activation time.
+xpost posts to X through X's web composer with an exported browser session, not
+the API. X's terms restrict automated access, so the account can be limited, and
+a change to X's pages can stop X posts until xpost is updated. Mastodon and
+Bluesky use their APIs.
 
 ## Activation gates
 
@@ -157,10 +162,12 @@ environment and recheck [current pricing][x-pricing] at activation time.
   the scoped organization GitHub App is installed; this is separate from the
   now-proven branch and ready-PR transport.
 - Organization GitHub App permissions reviewed and installation scoped.
-- X account/app policy setup complete; environment secrets and spending cap set.
-- A dry-run announcement prints exact JSON and creates no external state.
+- `social` environment restricted to `main`, with every account secret set only there.
+- Required Code Owner review enforced on `main` for publisher code, workflows and
+  CODEOWNERS, with no bypass.
+- A bootstrap run records the current catalog without posting, and a dry run
+  renders and validates one entry with `xpost --dry-run` without posting.
 
 [reuse]: https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows
 [trigger]: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow
-[x-guidelines]: https://docs.x.com/developer-guidelines
-[x-pricing]: https://docs.x.com/x-api/getting-started/pricing
+[xpost]: https://github.com/blacktop/xpost
