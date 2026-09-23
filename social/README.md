@@ -41,8 +41,15 @@ Publishing needs no approval: merged catalog entries go out on their own.
    base64 -i ~/.config/xpost/x-session.json | gh secret set XPOST_TWITTER_STATE_B64 --repo ipsw-diffs/catalog --env social
    ```
 
-   Set up all three networks before the first publishing run. Missing provider credentials
-   can leave that network pending; a missing exported X session stops the workflow first.
+   The publisher posts to every network named in the `SOCIAL_NETWORKS` environment variable
+   (space-separated `bluesky`, `mastodon`, `twitter`; all three when unset). A listed network
+   without credentials leaves every entry pending on it, so list only configured networks:
+
+   ```fish
+   gh variable set SOCIAL_NETWORKS --repo ipsw-diffs/catalog --env social --body twitter
+   ```
+
+   Entries posted before you add a network are not backfilled to it.
 
 4. Record the current catalog so nothing already in it gets posted:
 

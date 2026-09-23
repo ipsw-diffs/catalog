@@ -151,6 +151,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           ENTRY_ID: ${{ inputs.entry_id || '' }}
+          # Space-separated xpost targets; set it on the social environment to post to fewer.
+          SOCIAL_NETWORKS: ${{ vars.SOCIAL_NETWORKS || 'bluesky mastodon twitter' }}
           # Credentials only reach publish runs.
           XPOST_TWITTER_USER: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_TWITTER_USER || '' }}
           XPOST_TWITTER_ACCOUNT_ID: ${{ env.PUBLISH_MODE == 'publish' && secrets.XPOST_TWITTER_ACCOUNT_ID || '' }}
@@ -165,17 +167,23 @@ jobs:
           session_dir=$(mktemp -d)
           trap 'rm -rf "$session_dir"' EXIT
           args=(--mode "$PUBLISH_MODE" --output-dir "$RUNNER_TEMP/social")
+          read -r -a networks <<< "$SOCIAL_NETWORKS"
+          for network in "${networks[@]}"; do
+            args+=(--network "$network")
+          done
           case "$PUBLISH_MODE" in
             dry-run) args+=(--xpost "$XPOST" --entry-id "$ENTRY_ID") ;;
             publish)
               args+=(--xpost "$XPOST")
-              if [[ -z "$XPOST_TWITTER_STATE_B64" ]]; then
-                echo "Set the social secret XPOST_TWITTER_STATE_B64 from a fresh exported session." >&2
-                exit 1
+              if [[ " ${networks[*]} " == *" twitter "* ]]; then
+                if [[ -z "$XPOST_TWITTER_STATE_B64" ]]; then
+                  echo "Set the social secret XPOST_TWITTER_STATE_B64 from a fresh exported session." >&2
+                  exit 1
+                fi
+                printf '%s' "$XPOST_TWITTER_STATE_B64" | base64 --decode > "$session_dir/state.json"
+                export XPOST_TWITTER_STATE_FILE="$session_dir/state.json"
+                export XPOST_TWITTER_HELPER="$GITHUB_WORKSPACE/xpost/helper"
               fi
-              printf '%s' "$XPOST_TWITTER_STATE_B64" | base64 --decode > "$session_dir/state.json"
-              export XPOST_TWITTER_STATE_FILE="$session_dir/state.json"
-              export XPOST_TWITTER_HELPER="$GITHUB_WORKSPACE/xpost/helper"
               ;;
           esac
           unset XPOST_TWITTER_STATE_B64
