@@ -6122,6 +6122,40 @@
     },
     {
       "destination": {
+        "commit": "8e9efb6b3f4693912235297a03f641f4270c7642",
+        "entrypoint": "diffs/27_0_26A428_vs_27_0_1_26A434/README.md",
+        "manifest_path": "manifests/27_0_26A428_vs_27_0_1_26A434.json",
+        "payload_path": "diffs/27_0_26A428_vs_27_0_1_26A434",
+        "repository": "https://github.com/ipsw-diffs/macos-27"
+      },
+      "device": "Mac18,5",
+      "from": {
+        "build": "26A428",
+        "input": "UniversalMac_27.0_26A428_Restore.ipsw",
+        "version": "27.0"
+      },
+      "id": "macos-27.0.1-26A428-26A434",
+      "integrity": {
+        "git_tree": "1070275b87e2ed05aed233b759ac27a8cf6fd3b1",
+        "logical_bytes": 83061,
+        "tracked_file_count": 26
+      },
+      "major_version": 27,
+      "platform": "macOS",
+      "schema_version": 1,
+      "source": {
+        "commit": "ec3ed985787cda55b721c53dad696874f983dbb9",
+        "path": "27_0_26A428_vs_27_0_1_26A434",
+        "repository": "https://github.com/ipsw-diffs/macos-27"
+      },
+      "to": {
+        "build": "26A434",
+        "input": "UniversalMac_27.0.1_26A434_Restore.ipsw",
+        "version": "27.0.1"
+      }
+    },
+    {
+      "destination": {
         "commit": "4c9c95475a382be1919a513b83c3fcae3c8b48e1",
         "entrypoint": "diffs/27_0_26A428_vs_27_2_26B5086k/README.md",
         "manifest_path": "manifests/27_0_26A428_vs_27_2_26B5086k.json",
