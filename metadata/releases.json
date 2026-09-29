@@ -2131,6 +2131,16 @@
       "source_path": "osFiles/macOS/26x - 27.x/26A428.json"
     },
     {
+      "beta": false,
+      "build": "26A434",
+      "channel": "release",
+      "display_version": "27.0.1",
+      "platform": "macOS",
+      "rc": false,
+      "released": "2026-09-28",
+      "source_path": "osFiles/macOS/26x - 27.x/26A434.json"
+    },
+    {
       "beta": true,
       "build": "26A5353q",
       "channel": "beta",
@@ -2243,7 +2253,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "commit": "47d93374f86c95c931f8a1f853dc200436c1f872",
+    "commit": "e7f6c07218488a8a71d79fe850c646bdbbb17f0f",
     "repository": "https://github.com/littlebyteorg/appledb"
   }
 }
