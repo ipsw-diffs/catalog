@@ -342,6 +342,40 @@
     },
     {
       "destination": {
+        "commit": "61a50bdeb08721a45f45c432b6f812f5ccd50a20",
+        "entrypoint": "diffs/27_0_24A437_vs_27_0_1_24A446/README.md",
+        "manifest_path": "manifests/27_0_24A437_vs_27_0_1_24A446.json",
+        "payload_path": "diffs/27_0_24A437_vs_27_0_1_24A446",
+        "repository": "https://github.com/ipsw-diffs/ios-27"
+      },
+      "device": "iPhone18,1",
+      "from": {
+        "build": "24A437",
+        "input": "iPhone18,1_27.0_24A437_Restore.ipsw",
+        "version": "27.0"
+      },
+      "id": "ios-27.0.1-24A437-24A446",
+      "integrity": {
+        "git_tree": "56b4fb0b5d0ec0e0cdbe6265b7caf0a9c5d2e28f",
+        "logical_bytes": 666757,
+        "tracked_file_count": 154
+      },
+      "major_version": 27,
+      "platform": "iOS",
+      "schema_version": 1,
+      "source": {
+        "commit": "0552416b211afde659ec45f5b86c209bce390787",
+        "path": "27_0_24A437_vs_27_0_1_24A446",
+        "repository": "https://github.com/ipsw-diffs/ios-27"
+      },
+      "to": {
+        "build": "24A446",
+        "input": "iPhone18,1_27.0.1_24A446_Restore.ipsw",
+        "version": "27.0.1"
+      }
+    },
+    {
+      "destination": {
         "commit": "4c6365c2a47e18ff126ba1bd9743c73fa52d2e40",
         "entrypoint": "diffs/27_0_24A437_vs_27_2_24B5084k/README.md",
         "manifest_path": "manifests/27_0_24A437_vs_27_2_24B5084k.json",
@@ -405,6 +439,40 @@
       "to": {
         "build": "24B5089g",
         "input": "iPhone18,1_27.2_24B5089g_Restore.ipsw",
+        "version": "27.2"
+      }
+    },
+    {
+      "destination": {
+        "commit": "61a50bdeb08721a45f45c432b6f812f5ccd50a20",
+        "entrypoint": "diffs/27_2_24B5089g_vs_27_2_24B5099f/README.md",
+        "manifest_path": "manifests/27_2_24B5089g_vs_27_2_24B5099f.json",
+        "payload_path": "diffs/27_2_24B5089g_vs_27_2_24B5099f",
+        "repository": "https://github.com/ipsw-diffs/ios-27"
+      },
+      "device": "iPhone18,1",
+      "from": {
+        "build": "24B5089g",
+        "input": "iPhone18,1_27.2_24B5089g_Restore.ipsw",
+        "version": "27.2"
+      },
+      "id": "ios-27.2-24B5089g-24B5099f",
+      "integrity": {
+        "git_tree": "21ca01a32b271c984a250c4943013f38f00d65d7",
+        "logical_bytes": 39060230,
+        "tracked_file_count": 3558
+      },
+      "major_version": 27,
+      "platform": "iOS",
+      "schema_version": 1,
+      "source": {
+        "commit": "7ac4ae5600f4b1eaa23e67c615be1314d6d49c95",
+        "path": "27_2_24B5089g_vs_27_2_24B5099f",
+        "repository": "https://github.com/ipsw-diffs/ios-27"
+      },
+      "to": {
+        "build": "24B5099f",
+        "input": "iPhone18,1_27.2_24B5099f_Restore.ipsw",
         "version": "27.2"
       }
     },
@@ -6219,6 +6287,40 @@
       "to": {
         "build": "26B5091g",
         "input": "UniversalMac_27.2_26B5091g_Restore.ipsw",
+        "version": "27.2"
+      }
+    },
+    {
+      "destination": {
+        "commit": "32a4f5f0d7a11f9a39bb98610ba85c104b42394b",
+        "entrypoint": "diffs/27_2_26B5091g_vs_27_2_26B5101f/README.md",
+        "manifest_path": "manifests/27_2_26B5091g_vs_27_2_26B5101f.json",
+        "payload_path": "diffs/27_2_26B5091g_vs_27_2_26B5101f",
+        "repository": "https://github.com/ipsw-diffs/macos-27"
+      },
+      "device": "Mac18,5",
+      "from": {
+        "build": "26B5091g",
+        "input": "UniversalMac_27.2_26B5091g_Restore.ipsw",
+        "version": "27.2"
+      },
+      "id": "macos-27.2-26B5091g-26B5101f",
+      "integrity": {
+        "git_tree": "470920c48efa64058e35a9f7ed866fe75d6f6825",
+        "logical_bytes": 26177462,
+        "tracked_file_count": 1827
+      },
+      "major_version": 27,
+      "platform": "macOS",
+      "schema_version": 1,
+      "source": {
+        "commit": "dd79b965f3d85c5a4637a75005a98e39ef05ec75",
+        "path": "27_2_26B5091g_vs_27_2_26B5101f",
+        "repository": "https://github.com/ipsw-diffs/macos-27"
+      },
+      "to": {
+        "build": "26B5101f",
+        "input": "UniversalMac_27.2_26B5101f_Restore.ipsw",
         "version": "27.2"
       }
     },
