@@ -1,0 +1,27 @@
+{
+  "destination": {
+    "manifest_path": "manifests/27_2_24B5089g_vs_27_2_24B5099f.json",
+    "payload_path": "diffs/27_2_24B5089g_vs_27_2_24B5099f",
+    "repository": "https://github.com/ipsw-diffs/ios-27"
+  },
+  "device": "iPhone18,1",
+  "from": {
+    "build": "24B5089g",
+    "input": "iPhone18,1_27.2_24B5089g_Restore.ipsw",
+    "version": "27.2"
+  },
+  "id": "ios-27.2-24B5089g-24B5099f",
+  "major_version": 27,
+  "platform": "iOS",
+  "schema_version": 1,
+  "source": {
+    "commit": "7ac4ae5600f4b1eaa23e67c615be1314d6d49c95",
+    "path": "27_2_24B5089g_vs_27_2_24B5099f",
+    "repository": "https://github.com/ipsw-diffs/ios-27"
+  },
+  "to": {
+    "build": "24B5099f",
+    "input": "iPhone18,1_27.2_24B5099f_Restore.ipsw",
+    "version": "27.2"
+  }
+}
