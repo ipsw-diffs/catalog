@@ -1,0 +1,27 @@
+{
+  "destination": {
+    "manifest_path": "manifests/27_2_24B115_vs_27_2_24B119.json",
+    "payload_path": "diffs/27_2_24B115_vs_27_2_24B119",
+    "repository": "https://github.com/ipsw-diffs/ios-27"
+  },
+  "device": "iPhone18,1",
+  "from": {
+    "build": "24B115",
+    "input": "iPhone18,1_27.2_24B115_Restore.ipsw",
+    "version": "27.2"
+  },
+  "id": "ios-27.2-24B115-24B119",
+  "major_version": 27,
+  "platform": "iOS",
+  "schema_version": 1,
+  "source": {
+    "commit": "fdb342c071375b5c24e5ed7a5e495d821f6a3318",
+    "path": "27_2_24B115_vs_27_2_24B119",
+    "repository": "https://github.com/ipsw-diffs/ios-27"
+  },
+  "to": {
+    "build": "24B119",
+    "input": "iPhone18,1_27.2_24B119_Restore.ipsw",
+    "version": "27.2"
+  }
+}
