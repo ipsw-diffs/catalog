@@ -11,6 +11,15 @@ from pathlib import Path
 import pytest
 
 INSTALLER = Path(__file__).resolve().parents[1] / "scripts/install-latest-ipsw.sh"
+MAX_ATTEMPTS = 5
+TRANSIENT_ATTEMPTS = 3
+# Fails until the last attempt and leaves a partial file behind, so a retry has to overwrite it.
+TRANSIENT_FAILURE = f"""
+if [ "$(wc -l < "$FIXTURE/download-attempts")" -lt {TRANSIENT_ATTEMPTS} ]; then
+  printf 'partial' > "$output"
+  exit 1
+fi
+"""
 
 
 @pytest.mark.parametrize(
@@ -24,10 +33,11 @@ INSTALLER = Path(__file__).resolve().parents[1] / "scripts/install-latest-ipsw.s
         "bad-checksum",
         "wrong-version",
         "download-failure",
+        "download-transient",
     ],
 )
 def test_install_latest_ipsw(tmp_path: Path, scenario: str) -> None:
-    # Real extraction and hashing of a tiny executable; only network clients are mocked.
+    # Real extraction and hashing of a tiny executable; only `gh` and retry timing are mocked.
     binary_version = "3.1.708" if scenario == "wrong-version" else "3.1.720"
     payload = f'#!/bin/sh\nprintf "Version: {binary_version}, BuildCommit: abc123\\n"\n'.encode()
     archive = tmp_path / "release.tar.gz"
@@ -55,25 +65,32 @@ def test_install_latest_ipsw(tmp_path: Path, scenario: str) -> None:
     )
     mock_bin = tmp_path / "mocks"
     mock_bin.mkdir()
+    api_response = "exit 1" if scenario == "api-failure" else 'cat "$FIXTURE/release.json"'
+    download_failures = {"download-failure": "exit 1", "download-transient": TRANSIENT_FAILURE}
     clients = {
-        "gh": 'test "$*" = "api repos/blacktop/ipsw/releases/latest" || exit 9\n'
-        + ("exit 1\n" if scenario == "api-failure" else 'cat "$FIXTURE/release.json"\n'),
-        "curl": "exit 1\n"
-        if scenario == "download-failure"
-        else """
-while [ "$#" -gt 0 ]; do
-  if [ "$1" = --output ]; then
-    output=$2
-    shift 2
-  else
-    url=$1
-    shift
-  fi
-done
-expected=https://github.com/blacktop/ipsw/releases/download/v3.1.720
-test "$url" = "$expected/ipsw_3.1.720_linux_x86_64.tar.gz" || exit 9
+        "gh": f"""
+if [ "$1" = api ]; then
+  test "$*" = "api repos/blacktop/ipsw/releases/latest" || exit 9
+  {api_response}
+  exit 0
+fi
+printf 'attempt\\n' >> "$FIXTURE/download-attempts"
+test "$1 $2 $3" = "release download v3.1.720" || exit 9
+test "$4 $5" = "--repo blacktop/ipsw" || exit 9
+test "$6 $7" = "--pattern ipsw_3.1.720_linux_x86_64.tar.gz" || exit 9
+test "$8" = --output || exit 9
+test "${{10}}" = --clobber || exit 9
+output=$9
+{download_failures.get(scenario, ":")}
 cp "$FIXTURE/release.tar.gz" "$output"
 """,
+        "timeout": """
+test "$1" = 300 || exit 9
+printf 'attempt\\n' >> "$FIXTURE/timed-attempts"
+shift
+exec "$@"
+""",
+        "sleep": "exit 0\n",
     }
     for name, body in clients.items():
         executable = mock_bin / name
@@ -97,7 +114,7 @@ cp "$FIXTURE/release.tar.gz" "$output"
         text=True,
         check=False,
     )
-    if scenario == "success":
+    if scenario in {"success", "download-transient"}:
         assert result.returncode == 0, result.stderr
         assert github_env.read_text() == (f"IPSW_VERSION=3.1.720\nIPSW_ARCHIVE_SHA256={checksum}\n")
         assert (Path(github_path.read_text().strip()) / "ipsw").is_file()
@@ -106,3 +123,11 @@ cp "$FIXTURE/release.tar.gz" "$output"
         assert result.returncode != 0
         assert github_env.read_text() == ""
         assert github_path.read_text() == ""
+    attempts = tmp_path / "download-attempts"
+    if attempts.exists():
+        assert (tmp_path / "timed-attempts").read_text() == attempts.read_text()
+    if scenario == "download-failure":
+        assert len(attempts.read_text().splitlines()) == MAX_ATTEMPTS
+        assert f"after {MAX_ATTEMPTS} attempts" in result.stderr
+    if scenario == "download-transient":
+        assert len(attempts.read_text().splitlines()) == TRANSIENT_ATTEMPTS

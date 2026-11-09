@@ -5,10 +5,12 @@ at the start of each job using `scripts/install-latest-ipsw.sh`. Drafts and
 prereleases are excluded. Each job resolves the release once and uses its exact
 versioned Linux x86_64 archive for the remainder of the job.
 
-The installer requires the release asset's SHA-256 digest, verifies the archive
-before extraction, and checks the executable's reported version. An API error,
-missing asset or digest, checksum failure, or version mismatch fails the job;
-there is no fallback to an older binary. This trusts releases published by
+The installer downloads the asset with the job's GitHub token, making up to five
+attempts of at most 300 seconds each. It requires the release asset's SHA-256
+digest, verifies the archive before extraction, and checks the executable's
+reported version. An API error, exhausted download attempts, missing asset or
+digest, checksum failure, or version mismatch fails the job; there is no fallback
+to an older binary. This trusts releases published by
 `blacktop/ipsw`; the digest protects download integrity, not against a compromised
 upstream publisher.
 
