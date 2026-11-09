@@ -25,7 +25,8 @@ archive="$install_root/$asset"
 install_dir="$install_root/bin"
 
 printf 'Installing ipsw %s (SHA-256 %s)\n' "$tag" "$sha256"
-curl --fail --location --silent --show-error --retry 3 \
+curl --fail --location --silent --show-error \
+  --retry 5 --retry-delay 5 --retry-all-errors \
   --connect-timeout 30 --max-time 300 --output "$archive" "$url"
 printf '%s  %s\n' "$sha256" "$archive" | shasum --algorithm 256 --check --strict
 mkdir "$install_dir"
