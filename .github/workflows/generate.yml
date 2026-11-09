@@ -358,6 +358,7 @@ jobs:
             --ent \
             --files \
             --starts \
+            --sandbox \
             --signatures "$RUNNER_TEMP/symbolicator/kernel" \
             --block-list '__TEXT.__info_plist' \
             --block-list '__AUTH_CONST.__auth_ptr' \
