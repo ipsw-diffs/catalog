@@ -24,7 +24,8 @@ concurrency:
 
 jobs:
   generate:
-    runs-on: ubuntu-latest
+    # The pinned apfs-fuse commit requires CMake compatibility that Ubuntu 26.04 no longer has.
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     permissions:
       contents: write
