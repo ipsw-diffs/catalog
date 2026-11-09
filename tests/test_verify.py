@@ -92,6 +92,32 @@ def test_materialize_manifest_refuses_differing_output(
         )
 
 
+def test_materialize_manifest_accepts_ipsw_status_outputs(
+    repositories: Repositories,
+    tmp_path: Path,
+) -> None:
+    payload = repositories.source / "source-diff"
+    readme = payload / "README.md"
+    note = "> ℹ️ Skipped `sandbox`: this kernelcache is not supported\n\n"  # noqa: RUF001
+    readme.write_text(
+        readme.read_text(encoding="utf-8").replace("## Inputs", note + "## Inputs"),
+        encoding="utf-8",
+    )
+    (payload / "status.json").write_text(
+        '{"complete": true, "failed_sections": [], "skipped_sections": []}\n',
+        encoding="utf-8",
+    )
+    source_commit = commit_all(repositories.source, "skip note and status")
+    spec = replace(
+        repositories.spec,
+        source=replace(repositories.spec.source, commit=source_commit),
+    )
+
+    inventory = materialize_manifest(spec, repositories.source, tmp_path / "m.json", check=False)
+
+    assert inventory.file_count == EXPECTED_FILE_COUNT + 1
+
+
 def test_readme_metadata_mismatch_fails(repositories: Repositories) -> None:
     value = json.loads(repositories.spec_path.read_text(encoding="utf-8"))
     value["from"]["version"] = "9.9"
