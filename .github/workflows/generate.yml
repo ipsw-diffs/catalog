@@ -305,7 +305,7 @@ jobs:
           df "$swapdir" >/dev/null 2>&1 || swapdir=/
           avail_g="$(df -P "$swapdir" | awk 'NR==2 {print int($4/1024/1024)}')"
           size_g=$(( avail_g - 10 ))
-          [ "$size_g" -gt 28 ] && size_g=28
+          [ "$size_g" -gt 12 ] && size_g=12
           if [ "$size_g" -lt 8 ]; then
             echo "at least 8G swap is required; only ${avail_g}G is free on $swapdir" >&2
             exit 1
