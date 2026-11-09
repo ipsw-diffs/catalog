@@ -1122,6 +1122,16 @@
     },
     {
       "beta": false,
+      "build": "22H390",
+      "channel": "release",
+      "display_version": "18.7.12",
+      "platform": "iOS",
+      "rc": false,
+      "released": "2026-11-09",
+      "source_path": "osFiles/iOS/22x - 18.x/22H390.json"
+    },
+    {
+      "beta": false,
       "build": "23A340",
       "channel": "rc",
       "display_version": "26.0 RC",
@@ -2321,6 +2331,16 @@
       "source_path": "osFiles/macOS/26x - 27.x/26B123.json"
     },
     {
+      "beta": false,
+      "build": "26B131",
+      "channel": "release",
+      "display_version": "27.2.1",
+      "platform": "macOS",
+      "rc": false,
+      "released": "2026-11-09",
+      "source_path": "osFiles/macOS/26x - 27.x/26B131.json"
+    },
+    {
       "beta": true,
       "build": "26B5086k",
       "channel": "beta",
@@ -2373,7 +2393,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "commit": "c8f12ae3c50d2157a7cc524cc18e021bfc4db4d1",
+    "commit": "380c52f46116def7ef734b6472c9b817d4170649",
     "repository": "https://github.com/littlebyteorg/appledb"
   }
 }
