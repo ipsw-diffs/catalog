@@ -1861,6 +1861,16 @@
       "source_path": "osFiles/iOS/24x - 27.x/24B119.json"
     },
     {
+      "beta": false,
+      "build": "24B156",
+      "channel": "release",
+      "display_version": "27.2.1",
+      "platform": "iOS",
+      "rc": false,
+      "released": "2026-11-09",
+      "source_path": "osFiles/iOS/24x - 27.x/24B156.json"
+    },
+    {
       "beta": true,
       "build": "24B5084k",
       "channel": "beta",
@@ -2393,7 +2403,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "commit": "380c52f46116def7ef734b6472c9b817d4170649",
+    "commit": "c8fbed02c50315adec0bfa041f3b457656d82b23",
     "repository": "https://github.com/littlebyteorg/appledb"
   }
 }
