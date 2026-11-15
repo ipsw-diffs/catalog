@@ -1,0 +1,27 @@
+{
+  "destination": {
+    "manifest_path": "manifests/26_7_2_25G332_vs_26_7_3_25G416.json",
+    "payload_path": "diffs/26_7_2_25G332_vs_26_7_3_25G416",
+    "repository": "https://github.com/ipsw-diffs/macos-26"
+  },
+  "device": "Mac17,6",
+  "from": {
+    "build": "25G332",
+    "input": "Mac17,6_26.7.2_25G332_OTA.zip",
+    "version": "26.7.2"
+  },
+  "id": "macos-26.7.3-25G332-25G416",
+  "major_version": 26,
+  "platform": "macOS",
+  "schema_version": 1,
+  "source": {
+    "commit": "1bd5a0de4d4483893bac598c661d7a8f6c3f3182",
+    "path": "26_7_2_25G332_vs_26_7_3_25G416",
+    "repository": "https://github.com/ipsw-diffs/macos-26"
+  },
+  "to": {
+    "build": "25G416",
+    "input": "Mac17,6_26.7.3_25G416_OTA.zip",
+    "version": "26.7.3"
+  }
+}

@@ -2071,6 +2071,26 @@
       "source_path": "osFiles/macOS/24x - 15.x/24G90.json"
     },
     {
+      "beta": false,
+      "build": "24H232",
+      "channel": "release",
+      "display_version": "15.8.2",
+      "platform": "macOS",
+      "rc": false,
+      "released": "2026-10-26",
+      "source_path": "osFiles/macOS/24x - 15.x/24H232.json"
+    },
+    {
+      "beta": false,
+      "build": "24H314",
+      "channel": "rc",
+      "display_version": "15.8.3 RC",
+      "platform": "macOS",
+      "rc": true,
+      "released": "2026-11-03",
+      "source_path": "osFiles/macOS/24x - 15.x/24H314.json"
+    },
+    {
       "beta": true,
       "build": "25D5087f",
       "channel": "beta",
@@ -2129,6 +2149,26 @@
       "rc": false,
       "released": "2026-06-01",
       "source_path": "osFiles/macOS/25x - 26.x/25F80.json"
+    },
+    {
+      "beta": false,
+      "build": "25G332",
+      "channel": "release",
+      "display_version": "26.7.2",
+      "platform": "macOS",
+      "rc": false,
+      "released": "2026-10-26",
+      "source_path": "osFiles/macOS/25x - 26.x/25G332.json"
+    },
+    {
+      "beta": false,
+      "build": "25G416",
+      "channel": "rc",
+      "display_version": "26.7.3 RC",
+      "platform": "macOS",
+      "rc": true,
+      "released": "2026-11-03",
+      "source_path": "osFiles/macOS/25x - 26.x/25G416.json"
     },
     {
       "beta": true,
@@ -2403,7 +2443,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "commit": "c8fbed02c50315adec0bfa041f3b457656d82b23",
+    "commit": "435f4a3c8e3ffd5e790de1cd825b00de2f3a6406",
     "repository": "https://github.com/littlebyteorg/appledb"
   }
 }
