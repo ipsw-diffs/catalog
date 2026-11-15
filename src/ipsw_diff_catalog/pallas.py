@@ -15,6 +15,47 @@ if TYPE_CHECKING:
 
 _CHANNEL_LABELS = {"release": "", "rc": " RC", "beta": " beta"}
 _MAJOR = re.compile(r"([0-9]+)(?:\.|$)")
+_BASE_VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*")
+# Apple's documentation IDs for seeds look like iOS273Beta2 or macOS2673RC.
+_SEED_DOCUMENTATION_ID = re.compile(r"(?:iOS|iPadOS|macOS)([0-9]+)(Beta|RC)([1-9][0-9]*)?")
+_SEED_QUALIFIERS = {"beta": ("Beta", "beta"), "rc": ("RC", "RC")}
+
+
+def _seed_label(version: str, kind: str, documentation_id: object) -> str | None:
+    match = (
+        _SEED_DOCUMENTATION_ID.fullmatch(documentation_id)
+        if isinstance(documentation_id, str)
+        else None
+    )
+    marker, qualifier = _SEED_QUALIFIERS[kind]
+    if match is None or match.group(2) != marker:
+        return None
+    digits = {version.replace(".", "")}
+    if version.endswith(".0"):
+        digits.add(version.removesuffix(".0").replace(".", ""))
+    if match.group(1) not in digits:
+        return None
+    ordinal = int(match.group(3) or "1")
+    return f"{version} {qualifier}" if ordinal == 1 else f"{version} {qualifier} {ordinal}"
+
+
+def display_version(entry: JsonObject) -> str | None:
+    """Returns a Pallas OTA's label in AppleDB's style, such as "27.3 beta 2".
+
+    AppleDB calls the first beta "27.3 beta" and the second "27.3 beta 2", and Pallas only
+    carries the ordinal in the documentation ID. Returns None when the documentation ID does
+    not name the same version and channel, so callers wait for AppleDB instead of guessing.
+    """
+    version = entry.get("version")
+    channel = entry.get("channel")
+    if not isinstance(version, str) or _BASE_VERSION.fullmatch(version) is None:
+        return None
+    kind = channel.get("kind") if isinstance(channel, dict) else None
+    if kind == "release":
+        return version
+    if not isinstance(channel, dict) or kind not in _SEED_QUALIFIERS:
+        return None
+    return _seed_label(version, str(kind), channel.get("documentation_id"))
 
 
 @dataclass(frozen=True)
@@ -70,6 +111,11 @@ def _entries(path: Path) -> list[tuple[JsonObject, str]]:
         (_object(item, f"{path} otas[{index}]"), f"{path} otas[{index}]")
         for index, item in enumerate(otas)
     ]
+
+
+def read_pallas_entries(paths: tuple[Path, ...]) -> list[tuple[JsonObject, str]]:
+    """Returns every OTA in the given `ipsw dl ota --json` files, each with its file context."""
+    return [item for path in paths for item in _entries(path)]
 
 
 def _selects_track(entry: JsonObject, platform: str, device: str, major: int) -> bool:

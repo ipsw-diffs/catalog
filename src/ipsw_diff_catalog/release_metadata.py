@@ -13,6 +13,7 @@ from ipsw_diff_catalog.git import (
     tree_paths,
 )
 from ipsw_diff_catalog.model import CatalogError, JsonObject, canonical_json, parse_json_object
+from ipsw_diff_catalog.pallas import display_version, read_pallas_entries
 from ipsw_diff_catalog.release_source import appledb_platform
 from ipsw_diff_catalog.render import load_entries
 
@@ -42,7 +43,9 @@ class _RequiredRelease:
 
 
 @dataclass(frozen=True)
-class AppleDBRecord:
+class ReleaseRecord:
+    """One endpoint's label, from AppleDB or, until AppleDB records it, from Apple's Pallas."""
+
     platform: str
     build: str
     display_version: str
@@ -58,7 +61,7 @@ class AppleDBRecord:
         *,
         expected: _RequiredRelease,
         source_path: str,
-    ) -> AppleDBRecord:
+    ) -> ReleaseRecord:
         context = f"AppleDB {source_path}"
         data = parse_json_object(raw, context)
         required = {"osStr", "version", "build", "released"}
@@ -164,6 +167,14 @@ def _required_releases(entries_dir: Path) -> dict[tuple[str, str], _RequiredRele
     return required
 
 
+@dataclass(frozen=True)
+class PallasLabelSources:
+    """Pallas inventories that label builds AppleDB lacks, and the day they were fetched."""
+
+    paths: tuple[Path, ...] = ()
+    observed_on: date | None = None
+
+
 class AppleDBCoverageMissingError(CatalogError):
     """AppleDB has no record yet for a catalog build; publication should retry later."""
 
@@ -190,34 +201,94 @@ def _candidate_paths(
     return candidates
 
 
+def _pallas_record(
+    requirement: _RequiredRelease,
+    entries: list[tuple[JsonObject, str]],
+    observed_on: date | None,
+) -> ReleaseRecord | None:
+    """Labels a build from Pallas when every OTA Apple serves for it agrees on the label."""
+    labels: set[tuple[str, str, str, object]] = set()
+    for entry, _context in entries:
+        if entry.get("os") != requirement.appledb_platform:
+            continue
+        if entry.get("build") != requirement.build:
+            continue
+        label = display_version(entry)
+        channel = entry.get("channel")
+        if label is None or not isinstance(channel, dict):
+            return None
+        documentation_id = channel.get("documentation_id")
+        if not isinstance(documentation_id, str):
+            return None
+        labels.add((label, str(channel.get("kind")), documentation_id, entry.get("posting_date")))
+    if len(labels) != 1:
+        return None
+    label, kind, documentation_id, posting_date = labels.pop()
+    if label.partition(" ")[0] != requirement.version:
+        return None
+    if isinstance(posting_date, str):
+        released = _released(posting_date, f"Pallas {requirement.build} posting_date")
+    elif observed_on is not None:
+        # Apple publishes no posting date for seeds; the poller sees a build the day it ships.
+        released = observed_on.isoformat()
+    else:
+        return None
+    return ReleaseRecord(
+        platform=requirement.catalog_platform,
+        build=requirement.build,
+        display_version=label,
+        released=released,
+        beta=kind == "beta",
+        rc=kind == "rc",
+        source_path=f"pallas:{documentation_id}",
+    )
+
+
 def _load_records(
     repo: Path,
     commit: str,
     required: dict[tuple[str, str], _RequiredRelease],
-) -> tuple[AppleDBRecord, ...]:
+    pallas: PallasLabelSources,
+) -> tuple[ReleaseRecord, ...]:
     candidates = _candidate_paths(repo, commit, required)
     missing = sorted(key for key, paths in candidates.items() if not paths)
     ambiguous = sorted((key, paths) for key, paths in candidates.items() if len(paths) > 1)
     if ambiguous:
         raise CatalogError(f"AppleDB coverage differs: missing={missing}, ambiguous={ambiguous}")
-    if missing:
+    records = [
+        ReleaseRecord.from_blob(
+            blob_at_path(repo, commit, candidates[key][0]),
+            expected=requirement,
+            source_path=candidates[key][0],
+        )
+        for key, requirement in required.items()
+        if key not in missing
+    ]
+    entries = read_pallas_entries(pallas.paths) if missing else []
+    labeled = {
+        key: record
+        for key in missing
+        if (record := _pallas_record(required[key], entries, pallas.observed_on)) is not None
+    }
+    # A stale documentation ID would repeat an earlier seed's label, so a label another
+    # build already has means waiting for AppleDB's curated one.
+    taken = [(record.platform, record.display_version) for record in records]
+    taken += [(record.platform, record.display_version) for record in labeled.values()]
+    unlabeled = [
+        key
+        for key in missing
+        if key not in labeled
+        or taken.count((labeled[key].platform, labeled[key].display_version)) > 1
+    ]
+    if unlabeled:
         raise AppleDBCoverageMissingError(
-            f"AppleDB coverage differs: missing={missing}, ambiguous=[]"
+            f"AppleDB coverage differs: missing={unlabeled}, ambiguous=[]"
         )
-    records: list[AppleDBRecord] = []
-    for (platform, build), requirement in required.items():
-        source_path = candidates[(platform, build)][0]
-        records.append(
-            AppleDBRecord.from_blob(
-                blob_at_path(repo, commit, source_path),
-                expected=requirement,
-                source_path=source_path,
-            )
-        )
+    records.extend(labeled.values())
     return tuple(sorted(records, key=lambda item: (_PLATFORM_ORDER[item.platform], item.build)))
 
 
-def _registry_object(commit: str, records: tuple[AppleDBRecord, ...]) -> JsonObject:
+def _registry_object(commit: str, records: tuple[ReleaseRecord, ...]) -> JsonObject:
     return {
         "schema_version": 1,
         "source": {"repository": _APPLEDB_REPOSITORY, "commit": commit},
@@ -238,19 +309,26 @@ def _write_or_check(path: Path, content: str, *, check: bool) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def import_release_metadata(
+def import_release_metadata(  # noqa: PLR0913 - the CLI's flags, passed through
     entries_dir: Path,
     appledb_repo: Path,
     appledb_commit: str,
     output: Path,
     *,
     check: bool,
+    pallas: PallasLabelSources | None = None,
 ) -> ReleaseMetadataResult:
+    """Writes or checks the release registry for every catalog endpoint.
+
+    Builds AppleDB has not recorded yet are labeled from the `ipsw dl ota --json` files in
+    `pallas`; seeds without a Pallas posting date get its `observed_on` day. A build that
+    neither source labels raises `AppleDBCoverageMissingError`, so callers wait and retry.
+    """
     repo = ensure_repository(appledb_repo)
     require_origin(repo, _APPLEDB_REPOSITORY, "AppleDB")
     commit = resolve_commit(repo, appledb_commit)
     required = _required_releases(entries_dir)
-    records = _load_records(repo, commit, required)
+    records = _load_records(repo, commit, required, pallas or PallasLabelSources())
     _write_or_check(output, canonical_json(_registry_object(commit, records)), check=check)
     return ReleaseMetadataResult(
         output=output,

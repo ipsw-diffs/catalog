@@ -16,6 +16,8 @@ _BASE_VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*")
 _BETA_QUALIFIER = re.compile(r"beta(?: [1-9][0-9]*)?")
 _RC_QUALIFIER = re.compile(r"RC(?: [1-9][0-9]*)?")
 _PLATFORMS = {"iOS", "macOS"}
+# Labels for builds AppleDB has not recorded yet come from Apple's Pallas service.
+_PALLAS_SOURCE = re.compile(r"pallas:[A-Za-z0-9]+")
 _CHANNELS = {"beta", "rc", "release"}
 
 ReleaseKey = tuple[str, str]
@@ -93,6 +95,8 @@ def _validate_released(value: object, context: str) -> None:
 
 def _validate_source_path(value: object, platform: str, build: str, context: str) -> str:
     raw = _string(value, context)
+    if _PALLAS_SOURCE.fullmatch(raw) is not None:
+        return raw
     source_path = PurePosixPath(raw)
     allowed_platforms = {platform} if platform == "macOS" else {"iOS", "iPadOS"}
     roots = tuple(PurePosixPath("osFiles", item) for item in sorted(allowed_platforms))
@@ -218,7 +222,10 @@ def load_release_labels(
                 f"{requirement.version}, got {display_version}"
             )
         expected_root = PurePosixPath("osFiles", requirement.appledb_platform)
-        if not PurePosixPath(labels[key].source_path).is_relative_to(expected_root):
+        source_path = labels[key].source_path
+        if _PALLAS_SOURCE.fullmatch(source_path) is not None:
+            continue
+        if not PurePosixPath(source_path).is_relative_to(expected_root):
             platform, build = key
             raise CatalogError(
                 f"release registry {platform} {build} source path must be below {expected_root}"

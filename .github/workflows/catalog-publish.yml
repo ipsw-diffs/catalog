@@ -182,17 +182,39 @@ jobs:
         id: labels
         env:
           APPLEDB_COMMIT: ${{ needs.detect.outputs.appledb_commit }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # A shard can publish a build from Apple's Pallas service before AppleDB records it.
-          # Exit status 3 means exactly that, so wait for a later run instead of failing.
+          # Exit status 3 means exactly that: label those builds from Pallas, and if Pallas
+          # cannot label them either, wait for a later run instead of failing.
+          : > "$RUNNER_TEMP/release-metadata-args"
+          release_metadata() {
+            local arguments=()
+            while IFS= read -r argument; do
+              arguments+=("$argument")
+            done < "$RUNNER_TEMP/release-metadata-args"
+            uv run ipsw-diff-catalog release-metadata \
+              --appledb-repo "$RUNNER_TEMP/appledb" \
+              --appledb-commit "$APPLEDB_COMMIT" \
+              --output metadata/releases.json \
+              ${arguments[@]+"${arguments[@]}"}
+          }
           status=0
-          uv run ipsw-diff-catalog release-metadata \
-            --appledb-repo "$RUNNER_TEMP/appledb" \
-            --appledb-commit "$APPLEDB_COMMIT" \
-            --output metadata/releases.json || status=$?
+          release_metadata || status=$?
+          # Only this path needs ipsw, so a failed install never blocks AppleDB-labeled builds.
           if [ "$status" -eq 3 ]; then
-            echo "::notice::AppleDB has not recorded a merged build yet; publication waits"
+            if bash scripts/install-latest-ipsw.sh &&
+              PATH="$(tail -n 1 "$GITHUB_PATH"):$PATH" bash scripts/query-pallas-labels.sh; then
+              status=0
+              release_metadata || status=$?
+            else
+              echo "::warning::could not ask Pallas for labels; publication waits for AppleDB"
+              : > "$RUNNER_TEMP/release-metadata-args"
+            fi
+          fi
+          if [ "$status" -eq 3 ]; then
+            echo "::notice::neither AppleDB nor Pallas labels a merged build yet; publication waits"
             echo 'ready=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -232,11 +254,16 @@ jobs:
           uv run ty check src tests
           uv run pytest
           uv run ipsw-diff-catalog render --check
+          arguments=()
+          while IFS= read -r argument; do
+            arguments+=("$argument")
+          done < "$RUNNER_TEMP/release-metadata-args"
           uv run ipsw-diff-catalog release-metadata \
             --appledb-repo "$RUNNER_TEMP/appledb" \
             --appledb-commit "$APPLEDB_COMMIT" \
             --output metadata/releases.json \
-            --check
+            --check \
+            ${arguments[@]+"${arguments[@]}"}
           uv run ipsw-diff-catalog audit
 
       - name: Create unsigned non-overwriting publication commit

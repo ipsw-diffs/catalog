@@ -438,9 +438,19 @@ human-curated display version, beta/RC flags, release date, and exact source
 path in [the release registry](metadata/releases.json).
 
 The importer reads immutable Git objects rather than the AppleDB worktree. It
-fails closed on missing or ambiguous builds, platform/build/version conflicts,
-invalid dates and flags, a substituted Git remote, or stale output. It does not
-infer beta ordinals from build numbers or change catalog payload facts.
+fails closed on ambiguous builds, platform/build/version conflicts, invalid
+dates and flags, a substituted Git remote, or stale output. It does not infer
+beta ordinals from build numbers or change catalog payload facts.
+
+AppleDB is curated by hand and lags Apple by about an hour. Until it records a
+build, `--pallas-sources` (`ipsw dl ota --json` output from Apple's Pallas
+service) can label it: the ordinal comes from Apple's documentation ID, such as
+`iOS273Beta2` for `27.3 beta 2`, and the record's `source_path` is
+`pallas:<documentation ID>`. Seeds without a Pallas posting date get
+`--observed-on`. A build waits for AppleDB, exit status 3, when Pallas does not
+serve it, its documentation ID names another version or channel, its OTAs
+disagree, or its label repeats one another build already has. Once AppleDB
+records the build, its curated label replaces the Pallas one.
 The generated README requires exact registry coverage and displays each
 endpoint's curated label; `catalog.json` remains payload-derived and unchanged.
 

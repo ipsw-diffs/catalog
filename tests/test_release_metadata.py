@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import TYPE_CHECKING
 
 import pytest
@@ -9,8 +10,11 @@ from ipsw_diff_catalog import cli
 from ipsw_diff_catalog.model import CatalogError, JsonObject
 from ipsw_diff_catalog.release_metadata import (
     AppleDBCoverageMissingError,
+    PallasLabelSources,
     import_release_metadata,
 )
+from ipsw_diff_catalog.release_registry import load_release_labels
+from ipsw_diff_catalog.render import load_entries
 from tests.helpers import commit_all, git, init_repo
 
 if TYPE_CHECKING:
@@ -321,3 +325,152 @@ def test_import_rejects_stale_output_and_wrong_origin(tmp_path: Path) -> None:
     git(appledb, "remote", "set-url", "origin", "https://github.com/example/not-appledb")
     with pytest.raises(CatalogError, match="AppleDB origin differs"):
         import_release_metadata(entries, appledb, commit, output, check=False)
+
+
+def _pallas_ota(  # noqa: PLR0913
+    build: str = "A2",
+    *,
+    os: str = "iOS",
+    version: str = "27.0",
+    kind: str = "beta",
+    documentation_id: str = "iOS27Beta2",
+    posting_date: str | None = None,
+) -> JsonObject:
+    return {
+        "os": os,
+        "version": version,
+        "build": build,
+        "channel": {"kind": kind, "documentation_id": documentation_id},
+        "posting_date": posting_date,
+        "delivery": "full",
+        "prerequisite": None,
+        "supported_devices": ["Device1,1"],
+        "url": f"https://updates.cdn-apple.com/fixture/{'d' * 64}.aea",
+        "sha256": "e" * 64,
+    }
+
+
+def _pallas_file(path: Path, *otas: JsonObject) -> Path:
+    _write_json(path, {"schema_version": 1, "otas": list(otas)})
+    return path
+
+
+def _fixture_without_a2(tmp_path: Path) -> tuple[Path, Path, str]:
+    entries, appledb, _commit = _fixture(tmp_path)
+    git(appledb, "rm", "-q", "osFiles/iOS/1x - 27.x/A2.json")
+    return entries, appledb, commit_all(appledb, "remove build")
+
+
+@pytest.mark.parametrize(
+    ("posting_date", "released"),
+    [(None, "2026-11-17"), ("2026-11-16", "2026-11-16")],
+    ids=["seed-without-posting-date", "posting-date"],
+)
+def test_import_labels_a_build_appledb_lacks_from_pallas(
+    tmp_path: Path, posting_date: str | None, released: str
+) -> None:
+    entries, appledb, commit = _fixture_without_a2(tmp_path)
+    pallas = PallasLabelSources(
+        (_pallas_file(tmp_path / "pallas-beta.json", _pallas_ota(posting_date=posting_date)),),
+        date(2026, 11, 17),
+    )
+    output = tmp_path / "releases.json"
+
+    import_release_metadata(entries, appledb, commit, output, check=False, pallas=pallas)
+    import_release_metadata(entries, appledb, commit, output, check=True, pallas=pallas)
+
+    assert json.loads(output.read_text())["releases"][1] == {
+        "platform": "iOS",
+        "build": "A2",
+        "display_version": "27.0 beta 2",
+        "channel": "beta",
+        "beta": True,
+        "rc": False,
+        "released": released,
+        "source_path": "pallas:iOS27Beta2",
+    }
+    labels = load_release_labels(output, load_entries(entries))
+    assert labels[("iOS", "A2")].display_version == "27.0 beta 2"
+
+
+def test_import_keeps_appledb_as_the_record_once_it_has_the_build(tmp_path: Path) -> None:
+    entries, appledb, commit = _fixture(tmp_path)
+    pallas = PallasLabelSources(
+        (_pallas_file(tmp_path / "pallas.json", _pallas_ota(documentation_id="iOS27Beta3")),),
+        date(2026, 11, 17),
+    )
+    output = tmp_path / "releases.json"
+
+    import_release_metadata(entries, appledb, commit, output, check=False, pallas=pallas)
+
+    assert json.loads(output.read_text())["releases"][1]["source_path"] == (
+        "osFiles/iOS/1x - 27.x/A2.json"
+    )
+
+
+@pytest.mark.parametrize(
+    ("otas", "observed_on"),
+    [
+        ([], date(2026, 11, 17)),
+        ([_pallas_ota(documentation_id="iOS28Beta2")], date(2026, 11, 17)),
+        ([_pallas_ota(os="macOS")], date(2026, 11, 17)),
+        ([_pallas_ota(version="27.1", documentation_id="iOS271Beta2")], date(2026, 11, 17)),
+        ([_pallas_ota()], None),
+        (
+            [_pallas_ota(), _pallas_ota(documentation_id="iOS27Beta3")],
+            date(2026, 11, 17),
+        ),
+        ([_pallas_ota(documentation_id="iOS27Beta1")], date(2026, 11, 17)),
+    ],
+    ids=[
+        "not-served",
+        "documentation-id-names-another-version",
+        "other-platform",
+        "other-base-version",
+        "no-date",
+        "conflicting-labels",
+        "stale-documentation-id-repeats-an-appledb-label",
+    ],
+)
+def test_import_waits_when_pallas_cannot_label_the_build(
+    tmp_path: Path, otas: list[JsonObject], observed_on: date | None
+) -> None:
+    entries, appledb, commit = _fixture_without_a2(tmp_path)
+    pallas = PallasLabelSources((_pallas_file(tmp_path / "pallas.json", *otas),), observed_on)
+
+    with pytest.raises(AppleDBCoverageMissingError, match=r"missing=.*A2"):
+        import_release_metadata(
+            entries, appledb, commit, tmp_path / "releases.json", check=False, pallas=pallas
+        )
+
+
+def test_cli_labels_builds_from_pallas_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entries, appledb, commit = _fixture_without_a2(tmp_path)
+    pallas = _pallas_file(tmp_path / "pallas-beta.json", _pallas_ota())
+    output = tmp_path / "releases.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "ipsw-diff-catalog",
+            "release-metadata",
+            "--entries-dir",
+            str(entries),
+            "--appledb-repo",
+            str(appledb),
+            "--appledb-commit",
+            commit,
+            "--output",
+            str(output),
+            "--pallas-sources",
+            str(pallas),
+            "--observed-on",
+            "2026-11-17",
+        ],
+    )
+
+    cli.main()
+
+    assert "releases=2 betas=2" in capsys.readouterr().out
+    assert json.loads(output.read_text())["releases"][1]["released"] == "2026-11-17"

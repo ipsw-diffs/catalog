@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from ipsw_diff_catalog.model import CatalogError, JsonObject
-from ipsw_diff_catalog.pallas import read_pallas
+from ipsw_diff_catalog.pallas import display_version, read_pallas
 
 _CAPTURED = Path(__file__).parent / "fixtures/pallas-v3.1.747-mac17-6-release.json"
 _DIGEST = "a" * 40
@@ -163,3 +163,55 @@ def test_read_rejects_a_changed_envelope(tmp_path: Path, value: object) -> None:
 
     with pytest.raises(CatalogError):
         _read(path)
+
+
+@pytest.mark.parametrize(
+    ("version", "kind", "documentation_id", "label"),
+    [
+        ("27.3", "release", "iOS273Long", "27.3"),
+        ("26.7.3", "release", "macOS2673RC", "26.7.3"),
+        ("27.3", "beta", "iOS273Beta1", "27.3 beta"),
+        ("27.3", "beta", "iOS273Beta2", "27.3 beta 2"),
+        ("27.3", "beta", "iOS273Beta", "27.3 beta"),
+        ("26.7.3", "rc", "macOS2673RC", "26.7.3 RC"),
+        ("27.2", "rc", "iOS272RC2", "27.2 RC 2"),
+        ("27.0", "beta", "iOS27Beta5", "27.0 beta 5"),
+        ("27.0", "beta", "iOS270Beta5", "27.0 beta 5"),
+        ("17.7", "beta", "iPadOS177Beta3", "17.7 beta 3"),
+    ],
+)
+def test_display_version_follows_appledb_labels(
+    version: str, kind: str, documentation_id: str, label: str
+) -> None:
+    entry: JsonObject = {
+        "version": version,
+        "channel": {"kind": kind, "documentation_id": documentation_id},
+    }
+
+    assert display_version(entry) == label
+
+
+@pytest.mark.parametrize(
+    ("version", "kind", "documentation_id"),
+    [
+        ("27.3", "beta", "iOS272Beta2"),
+        ("27.3", "beta", "iOS273RC"),
+        ("27.3", "rc", "iOS273Beta1"),
+        ("27.3", "beta", "iOS273Beta0"),
+        ("27.3", "beta", None),
+        ("27.3", "beta", "watchOS273Beta1"),
+        ("27.3", "seed", "iOS273Beta1"),
+        ("27.3", None, "iOS273Beta1"),
+        ("27.3 beta", "beta", "iOS273Beta1"),
+        (None, "beta", "iOS273Beta1"),
+    ],
+)
+def test_display_version_refuses_labels_pallas_cannot_back(
+    version: str | None, kind: str | None, documentation_id: str | None
+) -> None:
+    entry: JsonObject = {
+        "version": version,
+        "channel": {"kind": kind, "documentation_id": documentation_id},
+    }
+
+    assert display_version(entry) is None

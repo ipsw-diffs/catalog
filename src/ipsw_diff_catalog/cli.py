@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
 
 from ipsw_diff_catalog.archive import render_archive
@@ -13,6 +14,7 @@ from ipsw_diff_catalog.planner import plan
 from ipsw_diff_catalog.reconcile import reconcile
 from ipsw_diff_catalog.release_metadata import (
     AppleDBCoverageMissingError,
+    PallasLabelSources,
     import_release_metadata,
 )
 from ipsw_diff_catalog.render import render
@@ -187,6 +189,18 @@ def _add_release_metadata_parser(
     metadata_parser.add_argument("--appledb-repo", type=Path, required=True)
     metadata_parser.add_argument("--appledb-commit", required=True)
     metadata_parser.add_argument(
+        "--pallas-sources",
+        type=Path,
+        action="append",
+        default=[],
+        help="`ipsw dl ota --json` output that labels builds AppleDB has not recorded yet",
+    )
+    metadata_parser.add_argument(
+        "--observed-on",
+        type=date.fromisoformat,
+        help="UTC day the Pallas sources were fetched, used for seeds without a posting date",
+    )
+    metadata_parser.add_argument(
         "--output",
         type=Path,
         default=Path("metadata/releases.json"),
@@ -252,6 +266,7 @@ def _run_release_metadata(arguments: argparse.Namespace) -> None:
         arguments.appledb_commit,
         arguments.output,
         check=arguments.check,
+        pallas=PallasLabelSources(tuple(arguments.pallas_sources), arguments.observed_on),
     )
     verb = "Checked" if result.checked else "Wrote"
     print(
