@@ -1,0 +1,273 @@
+{
+  "schema_version": 1,
+  "otas": [
+    {
+      "os": "macOS",
+      "version": "27.2.1",
+      "version_extra": null,
+      "build": "26B131",
+      "channel": {
+        "kind": "release",
+        "release_type": null,
+        "documentation_id": "macOS2721Long",
+        "train_name": "FizzB",
+        "is_seed": null,
+        "audiences": [
+          {
+            "id": "60b55e25-a8ed-4f45-826c-c1495a4ccc65",
+            "name": "release",
+            "version": null
+          }
+        ]
+      },
+      "posting_date": "2026-11-09",
+      "delivery": "full",
+      "prerequisite": null,
+      "supported_devices": [
+        "Mac13,1",
+        "Mac13,2",
+        "Mac14,10",
+        "Mac14,12",
+        "Mac14,13",
+        "Mac14,14",
+        "Mac14,15",
+        "Mac14,2",
+        "Mac14,3",
+        "Mac14,5",
+        "Mac14,6",
+        "Mac14,7",
+        "Mac14,8",
+        "Mac14,9",
+        "Mac15,10",
+        "Mac15,11",
+        "Mac15,12",
+        "Mac15,13",
+        "Mac15,14",
+        "Mac15,3",
+        "Mac15,4",
+        "Mac15,5",
+        "Mac15,6",
+        "Mac15,7",
+        "Mac15,8",
+        "Mac15,9",
+        "Mac16,1",
+        "Mac16,10",
+        "Mac16,11",
+        "Mac16,12",
+        "Mac16,13",
+        "Mac16,2",
+        "Mac16,3",
+        "Mac16,5",
+        "Mac16,6",
+        "Mac16,7",
+        "Mac16,8",
+        "Mac16,9",
+        "Mac17,14",
+        "Mac17,15",
+        "Mac17,16",
+        "Mac17,2",
+        "Mac17,3",
+        "Mac17,4",
+        "Mac17,5",
+        "Mac17,6",
+        "Mac17,7",
+        "Mac17,8",
+        "Mac17,9",
+        "Mac18,5",
+        "MacBookAir10,1",
+        "MacBookPro17,1",
+        "MacBookPro18,1",
+        "MacBookPro18,2",
+        "MacBookPro18,3",
+        "MacBookPro18,4",
+        "Macmini9,1",
+        "VirtualMac2,1",
+        "iMac21,1",
+        "iMac21,2"
+      ],
+      "supported_models": [
+        "J716cAP"
+      ],
+      "url": "https://updates.cdn-apple.com/2026FallFCS/34d64836-60b8-4c32-8ddf-828a46f32658/com_apple_MobileAsset_MacSoftwareUpdate/8da54de562fa5e7e0356a7255f00f2127622a2d0.zip",
+      "download_size": 17779660456,
+      "unarchived_size": 18630369280,
+      "sha1": "8da54de562fa5e7e0356a7255f00f2127622a2d0",
+      "sha256": "73597f49c02c4f006baa3eea02d90151f5b4c9940c980ec8051b0a7ed21cede5",
+      "encryption": {
+        "encrypted": false,
+        "format": null,
+        "decryption_key_available": false
+      },
+      "provenance": {
+        "asset_type": "com.apple.MobileAsset.MacSoftwareUpdate",
+        "sightings": [
+          {
+            "source": "pallas",
+            "audience_id": "60b55e25-a8ed-4f45-826c-c1495a4ccc65",
+            "asset_set_id": "e9f5a080-fd34-49b1-837e-416aab0bfee2",
+            "posting_date": "2026-11-09",
+            "build": "26B131",
+            "documentation_id": "macOS2721Long",
+            "release_type": null,
+            "is_seed": null
+          }
+        ],
+        "asset_sets": [
+          {
+            "list": "PublicAssetSets",
+            "os": "macOS",
+            "product_version": "27.2.1",
+            "product_version_extra": null,
+            "build": "26B131",
+            "prerequisite_build": null,
+            "posting_date": "2026-11-09",
+            "expiration_date": "2027-02-13"
+          },
+          {
+            "list": "AssetSets",
+            "os": "macOS",
+            "product_version": "27.2.1",
+            "product_version_extra": null,
+            "build": "26B131",
+            "prerequisite_build": null,
+            "posting_date": "2026-11-09",
+            "expiration_date": "2027-02-13"
+          }
+        ]
+      }
+    },
+    {
+      "os": "macOS",
+      "version": "26.7.3",
+      "version_extra": null,
+      "build": "25G342",
+      "channel": {
+        "kind": "rc",
+        "release_type": null,
+        "documentation_id": "macOS2673RC",
+        "train_name": "CheerSecurityFizzB",
+        "is_seed": false,
+        "audiences": [
+          {
+            "id": "60b55e25-a8ed-4f45-826c-c1495a4ccc65",
+            "name": "release",
+            "version": null
+          }
+        ]
+      },
+      "posting_date": "2026-11-09",
+      "delivery": "full",
+      "prerequisite": null,
+      "supported_devices": [
+        "Mac13,1",
+        "Mac13,2",
+        "Mac14,10",
+        "Mac14,12",
+        "Mac14,13",
+        "Mac14,14",
+        "Mac14,15",
+        "Mac14,2",
+        "Mac14,3",
+        "Mac14,5",
+        "Mac14,6",
+        "Mac14,7",
+        "Mac14,8",
+        "Mac14,9",
+        "Mac15,10",
+        "Mac15,11",
+        "Mac15,12",
+        "Mac15,13",
+        "Mac15,14",
+        "Mac15,3",
+        "Mac15,4",
+        "Mac15,5",
+        "Mac15,6",
+        "Mac15,7",
+        "Mac15,8",
+        "Mac15,9",
+        "Mac16,1",
+        "Mac16,10",
+        "Mac16,11",
+        "Mac16,12",
+        "Mac16,13",
+        "Mac16,2",
+        "Mac16,3",
+        "Mac16,5",
+        "Mac16,6",
+        "Mac16,7",
+        "Mac16,8",
+        "Mac16,9",
+        "Mac17,2",
+        "Mac17,3",
+        "Mac17,4",
+        "Mac17,5",
+        "Mac17,6",
+        "Mac17,7",
+        "Mac17,8",
+        "Mac17,9",
+        "MacBookAir10,1",
+        "MacBookPro17,1",
+        "MacBookPro18,1",
+        "MacBookPro18,2",
+        "MacBookPro18,3",
+        "MacBookPro18,4",
+        "MacPro7,1",
+        "Macmini9,1",
+        "VirtualMac2,1",
+        "iMac21,1",
+        "iMac21,2",
+        "iSim1,1"
+      ],
+      "supported_models": [
+        "J716cAP"
+      ],
+      "url": "https://updates.cdn-apple.com/2026FallFCS/65bdbc01-9c55-4446-ad5b-a0d7e06482a0/com_apple_MobileAsset_MacSoftwareUpdate/20a2020f65175d83a4598927ebfd1ddf399f2276.zip",
+      "download_size": 18361040129,
+      "unarchived_size": 19218377728,
+      "sha1": "20a2020f65175d83a4598927ebfd1ddf399f2276",
+      "sha256": "8817c30dcc1b144a283f7bf1dc0867a969d1d9185d10a6e41ca075aaeaa6f18c",
+      "encryption": {
+        "encrypted": false,
+        "format": null,
+        "decryption_key_available": false
+      },
+      "provenance": {
+        "asset_type": "com.apple.MobileAsset.MacSoftwareUpdate",
+        "sightings": [
+          {
+            "source": "pallas",
+            "audience_id": "60b55e25-a8ed-4f45-826c-c1495a4ccc65",
+            "asset_set_id": "e9f5a080-fd34-49b1-837e-416aab0bfee2",
+            "posting_date": "2026-11-09",
+            "build": "25G342",
+            "documentation_id": "macOS2673RC",
+            "release_type": null,
+            "is_seed": false
+          }
+        ],
+        "asset_sets": [
+          {
+            "list": "PublicAssetSets",
+            "os": "macOS",
+            "product_version": "26.7.3",
+            "product_version_extra": null,
+            "build": "25G342",
+            "prerequisite_build": null,
+            "posting_date": "2026-11-09",
+            "expiration_date": "2027-02-13"
+          },
+          {
+            "list": "AssetSets",
+            "os": "macOS",
+            "product_version": "26.7.3",
+            "product_version_extra": null,
+            "build": "25G342",
+            "prerequisite_build": null,
+            "posting_date": "2026-11-09",
+            "expiration_date": "2027-02-13"
+          }
+        ]
+      }
+    }
+  ]
+}

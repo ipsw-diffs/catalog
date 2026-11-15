@@ -282,3 +282,34 @@ def test_record_never_overwrites_different_entry(
             destination_commit,
             entries,
         )
+
+
+def _replace_inputs(repositories: Repositories, previous: str, next_input: str) -> MigrationSpec:
+    readme = repositories.source / repositories.spec.source.path / "README.md"
+    content = readme.read_text(encoding="utf-8")
+    readme.write_text(
+        content.replace("Device1,1_1.0_A1_Restore.ipsw", previous).replace(
+            "Device1,1_1.1_A2_Restore.ipsw", next_input
+        ),
+        encoding="utf-8",
+    )
+    value = json.loads(repositories.spec_path.read_text(encoding="utf-8"))
+    value["source"]["commit"] = commit_all(repositories.source, "replace inputs")
+    value["from"]["input"] = previous
+    value["to"]["input"] = next_input
+    return MigrationSpec.from_object(value)
+
+
+def test_full_ota_inputs_validate(repositories: Repositories) -> None:
+    spec = _replace_inputs(repositories, "Device1,1_1.0_A1_OTA.zip", "Device1,1_1.1_A2_OTA.zip")
+
+    validate_source(spec, repositories.source)
+
+
+def test_mixed_ipsw_and_ota_inputs_fail(repositories: Repositories) -> None:
+    spec = _replace_inputs(
+        repositories, "Device1,1_1.0_A1_Restore.ipsw", "Device1,1_1.1_A2_OTA.zip"
+    )
+
+    with pytest.raises(CatalogError, match="inputs differ in kind"):
+        validate_source(spec, repositories.source)

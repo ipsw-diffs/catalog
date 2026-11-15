@@ -22,7 +22,7 @@ _PATH_PART = re.compile(r"[A-Za-z0-9][A-Za-z0-9,._+@-]*")
 _VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*(?: [A-Za-z0-9]+)*")
 _BUILD = re.compile(r"[A-Za-z0-9]+")
 _DEVICE = re.compile(r"[A-Za-z0-9][A-Za-z0-9,._-]*")
-_INPUT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9,._+-]*\.ipsw")
+_INPUT_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9,._+-]*(?:\.ipsw|_OTA\.zip)")
 
 
 class _DuplicateJsonKeyError(ValueError):
@@ -112,7 +112,7 @@ def _device(value: object, context: str) -> str:
 def _input_name(value: object, context: str) -> str:
     input_name = _string(value, context)
     if _INPUT_NAME.fullmatch(input_name) is None:
-        raise CatalogError(f"{context} must be a plain IPSW filename")
+        raise CatalogError(f"{context} must be a plain IPSW or full-OTA input filename")
     return input_name
 
 

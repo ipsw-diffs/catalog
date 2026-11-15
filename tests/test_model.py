@@ -74,7 +74,7 @@ def test_json_rejects_duplicate_keys() -> None:
 def test_spec_rejects_input_path(repositories: Repositories) -> None:
     data = json.loads(repositories.spec_path.read_text(encoding="utf-8"))
     data["from"]["input"] = "../Device1,1_1.0_A1_Restore.ipsw"
-    with pytest.raises(CatalogError, match="plain IPSW filename"):
+    with pytest.raises(CatalogError, match="plain IPSW or full-OTA input filename"):
         MigrationSpec.from_object(data)
 
 
@@ -95,3 +95,24 @@ def test_spec_rejects_unsupported_routing(
     data[field] = value
     with pytest.raises(CatalogError, match=message):
         MigrationSpec.from_object(data)
+
+
+@pytest.mark.parametrize(
+    ("name", "accepted"),
+    [
+        ("Mac17,6_1.0_A1_OTA.zip", True),
+        ("UniversalMac_1.0_A1_Restore.ipsw", True),
+        ("a3cdb8a53ac6beaaf73701ffa54b184b0de8e3a0.zip", False),
+        ("Mac17,6_1.0_A1_OTA.aea", False),
+    ],
+)
+def test_spec_accepts_ipsw_and_named_full_ota_inputs(
+    repositories: Repositories, name: str, *, accepted: bool
+) -> None:
+    data = json.loads(repositories.spec_path.read_text(encoding="utf-8"))
+    data["from"]["input"] = name
+    if accepted:
+        assert MigrationSpec.from_object(data).previous.input_name == name
+    else:
+        with pytest.raises(CatalogError, match="plain IPSW or full-OTA input filename"):
+            MigrationSpec.from_object(data)

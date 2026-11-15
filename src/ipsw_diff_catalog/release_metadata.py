@@ -164,6 +164,10 @@ def _required_releases(entries_dir: Path) -> dict[tuple[str, str], _RequiredRele
     return required
 
 
+class AppleDBCoverageMissingError(CatalogError):
+    """AppleDB has no record yet for a catalog build; publication should retry later."""
+
+
 def _candidate_paths(
     repo: Path,
     commit: str,
@@ -194,8 +198,12 @@ def _load_records(
     candidates = _candidate_paths(repo, commit, required)
     missing = sorted(key for key, paths in candidates.items() if not paths)
     ambiguous = sorted((key, paths) for key, paths in candidates.items() if len(paths) > 1)
-    if missing or ambiguous:
+    if ambiguous:
         raise CatalogError(f"AppleDB coverage differs: missing={missing}, ambiguous={ambiguous}")
+    if missing:
+        raise AppleDBCoverageMissingError(
+            f"AppleDB coverage differs: missing={missing}, ambiguous=[]"
+        )
     records: list[AppleDBRecord] = []
     for (platform, build), requirement in required.items():
         source_path = candidates[(platform, build)][0]

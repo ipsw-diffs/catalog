@@ -5,8 +5,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from ipsw_diff_catalog import cli
 from ipsw_diff_catalog.model import CatalogError, JsonObject
-from ipsw_diff_catalog.release_metadata import import_release_metadata
+from ipsw_diff_catalog.release_metadata import (
+    AppleDBCoverageMissingError,
+    import_release_metadata,
+)
 from tests.helpers import commit_all, git, init_repo
 
 if TYPE_CHECKING:
@@ -227,7 +231,7 @@ def test_import_rejects_missing_and_ambiguous_builds(tmp_path: Path) -> None:
     missing_commit = git(appledb, "rm", "-q", "osFiles/iOS/1x - 27.x/A2.json")
     assert missing_commit == ""
     missing_commit = commit_all(appledb, "remove build")
-    with pytest.raises(CatalogError, match=r"missing=.*A2"):
+    with pytest.raises(AppleDBCoverageMissingError, match=r"missing=.*A2"):
         import_release_metadata(
             entries, appledb, missing_commit, tmp_path / "missing.json", check=False
         )
@@ -237,7 +241,7 @@ def test_import_rejects_missing_and_ambiguous_builds(tmp_path: Path) -> None:
         _appledb_record("A1", "27.0 beta", beta=True),
     )
     ambiguous_commit = commit_all(appledb, "duplicate build")
-    with pytest.raises(CatalogError, match=r"ambiguous=.*A1"):
+    with pytest.raises(CatalogError, match=r"ambiguous=.*A1") as ambiguous:
         import_release_metadata(
             entries,
             appledb,
@@ -245,6 +249,38 @@ def test_import_rejects_missing_and_ambiguous_builds(tmp_path: Path) -> None:
             tmp_path / "ambiguous.json",
             check=False,
         )
+    assert not isinstance(ambiguous.value, AppleDBCoverageMissingError)
+
+
+def test_cli_exits_with_wait_status_only_for_builds_appledb_lacks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entries, appledb, _commit = _fixture(tmp_path)
+    git(appledb, "rm", "-q", "osFiles/iOS/1x - 27.x/A2.json")
+    missing_commit = commit_all(appledb, "remove build")
+
+    def run(commit: str) -> object:
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "ipsw-diff-catalog",
+                "release-metadata",
+                "--entries-dir",
+                str(entries),
+                "--appledb-repo",
+                str(appledb),
+                "--appledb-commit",
+                commit,
+                "--output",
+                str(tmp_path / "releases.json"),
+            ],
+        )
+        with pytest.raises(SystemExit) as exit_info:
+            cli.main()
+        return exit_info.value.code
+
+    assert run(missing_commit) == cli.EXIT_WAIT_FOR_APPLEDB
+    assert run("0" * 40) == 1
 
 
 @pytest.mark.parametrize(

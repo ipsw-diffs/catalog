@@ -18,10 +18,12 @@ _INPUT_HEADINGS = {
 }
 _REDIRECT_PREFIX = "# ⚠️ Please see corrected "
 _INPUT_COUNT = 2
+# Discovery names full-OTA inputs `<device>_<version>_<build>_OTA.zip`.
+_INPUT_SUFFIXES = (".ipsw", "_OTA.zip")
 
 
 class SourceReadmeError(CatalogError):
-    """A source report that cannot satisfy the ordinary two-IPSW contract."""
+    """A source report that cannot satisfy the ordinary two-input contract."""
 
     def __init__(self, code: str, detail: str) -> None:
         super().__init__(detail)
@@ -90,10 +92,19 @@ def _parse_inputs(lines: list[str]) -> tuple[str, tuple[str, str]]:
                 "source report inputs differ: each input must be one exact code-formatted bullet",
             )
         input_names.append(match.group(1))
-    if any(not input_name.endswith(".ipsw") for input_name in input_names):
+    suffixes = [
+        next((suffix for suffix in _INPUT_SUFFIXES if name.endswith(suffix)), None)
+        for name in input_names
+    ]
+    if None in suffixes:
         raise SourceReadmeError(
             "non-ipsw-inputs",
             "source report input section contains a non-IPSW artifact",
+        )
+    if suffixes[0] != suffixes[1]:
+        raise SourceReadmeError(
+            "mixed-inputs",
+            "source report inputs differ in kind: diff two IPSWs or two full OTAs",
         )
     return label, (input_names[0], input_names[1])
 

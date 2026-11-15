@@ -17,13 +17,15 @@ from ipsw_diff_catalog.git import (
     tree_paths,
 )
 from ipsw_diff_catalog.model import CatalogError, JsonObject, parse_json_object, read_json_object
+from ipsw_diff_catalog.pallas import PallasBuild, PallasDeferral, read_pallas
 
 _APPLEDB_REPOSITORY = "https://github.com/littlebyteorg/appledb"
 _IDENTIFIER = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _VERSION = re.compile(r"[0-9]+(?:\.[0-9]+)*(?: [A-Za-z0-9]+)*")
 _BUILD = re.compile(r"[A-Za-z0-9]+")
 _DEVICE = re.compile(r"[A-Za-z0-9][A-Za-z0-9,._-]*")
-_INPUT = re.compile(r"[A-Za-z0-9][A-Za-z0-9,._+-]*\.ipsw")
+_IPSW_INPUT = re.compile(r"[A-Za-z0-9][A-Za-z0-9,._+-]*\.ipsw")
+_OTA_URL_NAME = re.compile(r"[0-9a-f]{40}\.zip")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _BETA_QUALIFIER = re.compile(r"beta(?: [1-9][0-9]*)?")
 _RC_QUALIFIER = re.compile(r"RC(?: [1-9][0-9]*)?")
@@ -32,6 +34,8 @@ _CATALOG_TO_APPLEDB = {
     "macOS": frozenset({"macOS"}),
 }
 _TRACK_SCHEMA_VERSION = 2
+SourceKind = Literal["ipsw", "ota"]
+MetadataSource = Literal["appledb", "pallas"]
 
 
 def _object(value: object, context: str) -> JsonObject:
@@ -156,55 +160,91 @@ class ReleaseMetadata:
         }
 
 
+def _source_kind(data: JsonObject) -> SourceKind | None:
+    """Returns the kind of a full firmware source, or None for anything else."""
+    if data.get("type") == "ipsw":
+        return "ipsw"
+    if data.get("type") == "ota" and not data.get("prerequisiteBuild"):
+        return "ota"
+    return None
+
+
+def _active_apple_url(data: JsonObject, context: str) -> str:
+    active_urls: list[str] = []
+    for index, item in enumerate(_array(data["links"], f"{context}.links")):
+        link = _object(item, f"{context}.links[{index}]")
+        if _boolean(link.get("active", False), f"{context}.links[{index}].active"):
+            active_urls.append(_string(link.get("url"), f"{context}.links[{index}].url"))
+    if len(active_urls) != 1:
+        raise CatalogError(f"{context} must have exactly one active link")
+    url = active_urls[0]
+    parsed = urlparse(url)
+    hostname = parsed.hostname or ""
+    allowed_host = hostname == "apple.com" or hostname.endswith(".apple.com")
+    allowed_host = (
+        allowed_host or hostname == "cdn-apple.com" or hostname.endswith(".cdn-apple.com")
+    )
+    if parsed.scheme != "https" or not allowed_host or parsed.query or parsed.fragment:
+        raise CatalogError(f"{context} has an unsupported active URL")
+    return url
+
+
+def _input_name(url: str, kind: SourceKind, device: str, metadata: ReleaseMetadata) -> str:
+    url_name = unquote(PurePosixPath(urlparse(url).path).name)
+    if kind == "ipsw":
+        if _IPSW_INPUT.fullmatch(url_name) is None:
+            raise CatalogError("active URL has an unsupported IPSW filename")
+        if f"_{metadata.build}_" not in url_name:
+            raise CatalogError("IPSW filename does not contain its exact build")
+        return url_name
+    if _OTA_URL_NAME.fullmatch(url_name) is None:
+        raise CatalogError("active URL has an unsupported OTA filename")
+    # OTA files are named by digest, so name the input like an IPSW to keep the build in it.
+    return f"{device}_{metadata.base_version}_{metadata.build}_OTA.zip"
+
+
 @dataclass(frozen=True)
 class FirmwareSource:
+    kind: SourceKind
     input: str
     url: str
     size: int
     sha256: str
 
     @classmethod
-    def from_object(cls, value: object, device: str, context: str) -> FirmwareSource:
+    def from_object(
+        cls,
+        value: object,
+        device: str,
+        metadata: ReleaseMetadata,
+        context: str,
+    ) -> FirmwareSource:
         data = _object(value, context)
         required = {"type", "deviceMap", "links", "hashes", "size"}
         if not required <= set(data):
             raise CatalogError(f"{context} is missing keys: {sorted(required - set(data))}")
-        if data["type"] != "ipsw":
-            raise CatalogError(f"{context}.type must be ipsw")
+        kind = _source_kind(data)
+        if kind is None:
+            raise CatalogError(f"{context} must be an IPSW or a full OTA")
         devices = [
             _string(item, f"{context}.deviceMap")
             for item in _array(data["deviceMap"], f"{context}.deviceMap")
         ]
         if device not in devices:
             raise CatalogError(f"{context} does not select device {device}")
-
-        active_urls: list[str] = []
-        for index, item in enumerate(_array(data["links"], f"{context}.links")):
-            link = _object(item, f"{context}.links[{index}]")
-            if _boolean(link.get("active", False), f"{context}.links[{index}].active"):
-                active_urls.append(_string(link.get("url"), f"{context}.links[{index}].url"))
-        if len(active_urls) != 1:
-            raise CatalogError(f"{context} must have exactly one active link")
-        url = active_urls[0]
-        parsed = urlparse(url)
-        hostname = parsed.hostname or ""
-        allowed_host = hostname == "apple.com" or hostname.endswith(".apple.com")
-        allowed_host = (
-            allowed_host or hostname == "cdn-apple.com" or hostname.endswith(".cdn-apple.com")
-        )
-        if parsed.scheme != "https" or not allowed_host or parsed.query or parsed.fragment:
-            raise CatalogError(f"{context} has an unsupported active URL")
-        input_name = unquote(PurePosixPath(parsed.path).name)
-        if _INPUT.fullmatch(input_name) is None:
-            raise CatalogError(f"{context} active URL has an unsupported IPSW filename")
-
+        url = _active_apple_url(data, context)
+        try:
+            input_name = _input_name(url, kind, device, metadata)
+        except CatalogError as error:
+            raise CatalogError(f"{context} {error}") from error
         size = _integer(data["size"], f"{context}.size")
         hashes = _object(data["hashes"], f"{context}.hashes")
         sha256 = _string(hashes.get("sha2-256"), f"{context}.hashes.sha2-256", _SHA256)
-        return cls(input=input_name, url=url, size=size, sha256=sha256)
+        return cls(kind=kind, input=input_name, url=url, size=size, sha256=sha256)
 
     def to_object(self) -> JsonObject:
         return {
+            "kind": self.kind,
             "input": self.input,
             "url": self.url,
             "size": self.size,
@@ -215,28 +255,36 @@ class FirmwareSource:
 @dataclass(frozen=True)
 class AppleDBCandidate:
     metadata: ReleaseMetadata
-    source_path: str
-    source_value: object
-    source_context: str
+    source_path: str | None
+    sources: dict[SourceKind, tuple[object, str]]
+    origin: MetadataSource = "appledb"
 
-    def select(self, device: str) -> AppleDBRelease:
-        source = FirmwareSource.from_object(self.source_value, device, self.source_context)
-        if f"_{self.metadata.build}_" not in source.input:
-            raise CatalogError(
-                f"{self.source_context} IPSW filename does not contain its exact build"
-            )
-        return AppleDBRelease(metadata=self.metadata, source_path=self.source_path, source=source)
+    @property
+    def preferred_kind(self) -> SourceKind:
+        return "ipsw" if "ipsw" in self.sources else "ota"
+
+    def select(self, device: str, kind: SourceKind) -> AppleDBRelease:
+        value, context = self.sources[kind]
+        source = FirmwareSource.from_object(value, device, self.metadata, context)
+        return AppleDBRelease(
+            metadata=self.metadata,
+            source_path=self.source_path,
+            source=source,
+            origin=self.origin,
+        )
 
 
 @dataclass(frozen=True)
 class AppleDBRelease:
     metadata: ReleaseMetadata
-    source_path: str
+    source_path: str | None
     source: FirmwareSource
+    origin: MetadataSource = "appledb"
 
     def to_object(self) -> JsonObject:
         value = self.metadata.to_object()
         value["appledb_path"] = self.source_path
+        value["metadata_source"] = self.origin
         value["source"] = self.source.to_object()
         return value
 
@@ -249,6 +297,7 @@ class TrackPolicy:
     device: str
     major_version: int
     anchor: ReleaseMetadata
+    ota_fallback: bool
 
     @classmethod
     def from_object(cls, value: JsonObject) -> TrackPolicy:
@@ -261,10 +310,11 @@ class TrackPolicy:
             "major_version",
             "anchor",
         }
-        if set(value) != expected:
+        optional = {"ota_fallback"}
+        if not expected <= set(value) <= expected | optional:
             raise CatalogError(
                 f"track policy keys differ: missing={sorted(expected - set(value))}, "
-                f"extra={sorted(set(value) - expected)}"
+                f"extra={sorted(set(value) - expected - optional)}"
             )
         if (
             _integer(value["schema_version"], "track policy.schema_version")
@@ -278,7 +328,10 @@ class TrackPolicy:
             device=_string(value["device"], "track policy.device", _DEVICE),
             major_version=_integer(value["major_version"], "track policy.major_version"),
             anchor=ReleaseMetadata.from_object(value["anchor"], "track policy.anchor"),
+            ota_fallback=_boolean(value.get("ota_fallback", False), "track policy.ota_fallback"),
         )
+        if policy.ota_fallback and policy.platform != "macOS":
+            raise CatalogError("track policy.ota_fallback is only reviewed for macOS tracks")
         allowed_appledb = _CATALOG_TO_APPLEDB.get(policy.platform)
         if allowed_appledb is None or policy.appledb_platform not in allowed_appledb:
             raise CatalogError("track policy platform route is unsupported")
@@ -299,8 +352,16 @@ class DiscoveryEdge:
     previous: AppleDBRelease
     next: AppleDBRelease
 
+    def __post_init__(self) -> None:
+        if self.previous.source.kind != self.next.source.kind:
+            raise CatalogError("a discovery edge must diff two inputs of the same kind")
+
     def to_object(self) -> JsonObject:
-        return {"from": self.previous.to_object(), "to": self.next.to_object()}
+        return {
+            "kind": self.previous.source.kind,
+            "from": self.previous.to_object(),
+            "to": self.next.to_object(),
+        }
 
 
 @dataclass(frozen=True)
@@ -312,6 +373,9 @@ class DiscoveryDecision:
     edges: tuple[DiscoveryEdge, ...]
     observed_source_count: int
     selected_source_count: int
+    pallas_queried: bool = False
+    pallas_used: tuple[str, ...] = ()
+    pallas_deferred: tuple[PallasDeferral, ...] = ()
 
     @property
     def status(self) -> Literal["current", "candidate"]:
@@ -331,6 +395,11 @@ class DiscoveryDecision:
                 "observed": self.observed_source_count,
                 "selected": self.selected_source_count,
             },
+            "pallas": {
+                "queried": self.pallas_queried,
+                "used": list(self.pallas_used),
+                "deferred": [deferral.to_object() for deferral in self.pallas_deferred],
+            },
             "anchor": self.anchor.to_object(),
             "latest": self.latest.to_object(),
             "edges": [edge.to_object() for edge in self.edges],
@@ -342,15 +411,16 @@ class DiscoveryDecision:
         )
 
 
-def _supports_device(value: object, device: str, context: str) -> bool:
+def _device_source_kind(value: object, policy: TrackPolicy, context: str) -> SourceKind | None:
     data = _object(value, context)
-    if data.get("type") != "ipsw":
-        return False
+    kind = _source_kind(data)
+    if kind is None or (kind == "ota" and not policy.ota_fallback):
+        return None
     devices = [
         _string(item, f"{context}.deviceMap")
         for item in _array(data.get("deviceMap"), f"{context}.deviceMap")
     ]
-    return device in devices
+    return kind if policy.device in devices else None
 
 
 def _record_metadata(data: JsonObject, context: str) -> ReleaseMetadata:
@@ -370,16 +440,17 @@ def _compatible_source_values(
     data: JsonObject,
     policy: TrackPolicy,
     context: str,
-) -> tuple[tuple[object, str], ...]:
+) -> dict[SourceKind, list[tuple[object, str]]]:
     raw_sources = data.get("sources")
     if raw_sources is None:
-        return ()
-    compatible: list[tuple[object, str]] = []
+        return {}
+    compatible: dict[SourceKind, list[tuple[object, str]]] = {}
     for index, item in enumerate(_array(raw_sources, f"{context}.sources")):
         item_context = f"{context}.sources[{index}]"
-        if _supports_device(item, policy.device, item_context):
-            compatible.append((item, item_context))
-    return tuple(compatible)
+        kind = _device_source_kind(item, policy, item_context)
+        if kind is not None:
+            compatible.setdefault(kind, []).append((item, item_context))
+    return compatible
 
 
 def _release_from_blob(
@@ -401,18 +472,18 @@ def _release_from_blob(
     if not compatible:
         return None
     if "released" not in data:
-        raise CatalogError(f"{context} has a compatible IPSW source but no release date")
+        raise CatalogError(f"{context} has a compatible firmware source but no release date")
     metadata = _record_metadata(data, context)
     if _major(metadata.version, f"{context}.version") != policy.major_version:
         raise CatalogError(f"{context}.version differs from the track major")
-    if len(compatible) != 1:
-        raise CatalogError(f"{context} has multiple IPSW sources for {policy.device}")
-    source_value, source_context = compatible[0]
+    for kind, values in compatible.items():
+        if len(values) != 1:
+            label = "IPSW sources" if kind == "ipsw" else "full OTA sources"
+            raise CatalogError(f"{context} has multiple {label} for {policy.device}")
     return AppleDBCandidate(
         metadata=metadata,
         source_path=source_path,
-        source_value=source_value,
-        source_context=source_context,
+        sources={kind: values[0] for kind, values in compatible.items()},
     )
 
 
@@ -438,20 +509,23 @@ class ObservedSource:
         )
         artifact = self.artifact
         if (
-            artifact.get("source_type") != "ipsw"
+            artifact.get("source_type") not in ("ipsw", "ota")
             or artifact.get("delivery") != "full"
             or artifact.get("prerequisite_builds") != []
         ):
-            raise CatalogError(f"{self.context} must describe a full IPSW without prerequisites")
+            raise CatalogError(
+                f"{self.context} must describe a full IPSW or OTA without prerequisites"
+            )
         source = FirmwareSource.from_object(
             {
-                "type": "ipsw",
+                "type": artifact.get("source_type"),
                 "deviceMap": artifact.get("devices"),
                 "links": [{"url": artifact.get("active_url"), "active": True}],
                 "hashes": {"sha2-256": artifact.get("sha256")},
                 "size": artifact.get("size"),
             },
             device,
+            metadata,
             self.context,
         )
         return metadata, source
@@ -486,21 +560,24 @@ def _observed_sources(path: Path, platform: str) -> tuple[ObservedSource, ...]:
     return tuple(sources)
 
 
-def _require_ipsw_observation(
+def _require_observation(
     candidate: AppleDBCandidate,
+    kind: SourceKind,
     observed: tuple[ObservedSource, ...],
     device: str,
 ) -> AppleDBRelease:
-    release = candidate.select(device)
+    release = candidate.select(device, kind)
     matches = [
         value
         for value in observed
         if value.release["build"] == release.metadata.build
+        and value.artifact.get("source_type") == kind
         and value.artifact.get("active_url") == release.source.url
     ]
     if len(matches) != 1:
         raise CatalogError(
-            f"ipsw source coverage for {release.metadata.build} differs: found {len(matches)}"
+            f"ipsw {kind} source coverage for {release.metadata.build} differs: "
+            f"found {len(matches)}"
         )
     metadata, parsed = matches[0].select(device)
     if metadata != release.metadata:
@@ -557,7 +634,6 @@ def _manifest_inventory(
         raise CatalogError(f"no manifests found in {manifests_dir}")
     known: set[str] = set()
     edges: set[tuple[str, str]] = set()
-    anchor_endpoints = 0
     for path in paths:
         data = read_json_object(path)
         if (
@@ -571,10 +647,6 @@ def _manifest_inventory(
         next_build = _string(next_release.get("build"), f"{path} to.build", _BUILD)
         known.update((previous_build, next_build))
         edges.add((previous_build, next_build))
-        if next_build == policy.anchor.build:
-            anchor_endpoints += 1
-    if anchor_endpoints == 0:
-        raise CatalogError("track anchor is not backed by a merged manifest endpoint")
     return frozenset(known), frozenset(edges)
 
 
@@ -697,67 +769,181 @@ def _plan_candidate_edges(
     )
 
 
-def _select_releases(
+def _edge_kind(
+    previous: AppleDBCandidate,
+    next_release: AppleDBCandidate,
+) -> SourceKind:
+    for kind in ("ipsw", "ota"):
+        if kind in previous.sources and kind in next_release.sources:
+            return kind
+    raise CatalogError(
+        f"edge {previous.metadata.build} -> {next_release.metadata.build} has no firmware "
+        "source kind available for both builds"
+    )
+
+
+def _load_observed(
+    policy: TrackPolicy,
+    ipsw_sources: Path,
+    ota_sources: Path | None,
+) -> tuple[ObservedSource, ...]:
+    if policy.ota_fallback != (ota_sources is not None):
+        raise CatalogError(
+            "an OTA source inventory is required exactly when the track policy sets ota_fallback"
+        )
+    observed = _observed_sources(ipsw_sources, policy.appledb_platform)
+    if ota_sources is not None:
+        observed += _observed_sources(ota_sources, policy.appledb_platform)
+    return observed
+
+
+def _pallas_candidate(build: PallasBuild, policy: TrackPolicy) -> AppleDBCandidate | PallasDeferral:
+    try:
+        metadata = ReleaseMetadata.from_object(build.record, build.context)
+        candidate = AppleDBCandidate(
+            metadata=metadata,
+            source_path=None,
+            sources={"ota": (build.source, build.context)},
+            origin="pallas",
+        )
+        candidate.select(policy.device, "ota")
+    except CatalogError as error:
+        return PallasDeferral(build.build, str(error))
+    return candidate
+
+
+def _pallas_candidates(
+    policy: TrackPolicy,
+    pallas_sources: tuple[Path, ...],
+    appledb_builds: frozenset[str],
+) -> tuple[tuple[AppleDBCandidate, ...], list[PallasDeferral]]:
+    """Returns the full OTAs Apple serves that the pinned AppleDB commit does not record yet."""
+    if pallas_sources and not policy.ota_fallback:
+        raise CatalogError("Pallas OTA inventories need a track policy with ota_fallback")
+    inventory = read_pallas(
+        pallas_sources,
+        platform=policy.appledb_platform,
+        device=policy.device,
+        major=policy.major_version,
+    )
+    candidates: list[AppleDBCandidate] = []
+    deferred = [item for item in inventory.deferred if item.build not in appledb_builds]
+    for build in inventory.builds:
+        if build.build in appledb_builds:
+            continue
+        result = _pallas_candidate(build, policy)
+        if isinstance(result, PallasDeferral):
+            deferred.append(result)
+        else:
+            candidates.append(result)
+    return tuple(candidates), deferred
+
+
+def _plan_with_pallas(
+    policy: TrackPolicy,
     candidates: tuple[AppleDBCandidate, ...],
-    builds: frozenset[str],
-    observed: tuple[ObservedSource, ...],
-    device: str,
-) -> dict[str, AppleDBRelease]:
-    selected: dict[str, AppleDBRelease] = {}
-    for candidate in candidates:
-        build = candidate.metadata.build
-        if build in builds:
-            selected[build] = _require_ipsw_observation(candidate, observed, device)
-    missing = sorted(builds - set(selected))
-    if missing:
-        raise CatalogError(f"selected AppleDB builds are missing: {missing}")
-    return selected
+    known_builds: frozenset[str],
+    manifest_edges: frozenset[tuple[str, str]],
+) -> tuple[tuple[tuple[AppleDBCandidate, AppleDBCandidate], ...], list[PallasDeferral]]:
+    """Plans edges where a Pallas-only build is never a predecessor.
+
+    Pallas labels can disagree with AppleDB, so a build known only from Pallas may end an edge
+    but never start one; the next build waits until AppleDB records it.
+    """
+    deferred: list[PallasDeferral] = []
+    while True:
+        planned = _plan_candidate_edges(policy, candidates, known_builds, manifest_edges)
+        blocked = {
+            next_release.metadata.build: next_release
+            for previous, next_release in planned
+            if previous.origin == "pallas"
+        }
+        if not blocked:
+            return planned, deferred
+        for build, next_release in sorted(blocked.items()):
+            if next_release.origin != "pallas":
+                raise CatalogError(
+                    f"AppleDB build {build} follows a build only Pallas serves; "
+                    "wait for AppleDB to record the earlier build"
+                )
+            deferred.append(PallasDeferral(build, "its predecessor is Pallas-only"))
+        candidates = tuple(
+            candidate for candidate in candidates if candidate.metadata.build not in blocked
+        )
 
 
-def discover(
+def discover(  # noqa: PLR0913
     policy_path: Path,
     manifests_dir: Path,
     appledb_repo: Path,
     appledb_commit: str,
     ipsw_sources: Path,
+    *,
+    ota_sources: Path | None = None,
+    pallas_sources: tuple[Path, ...] = (),
 ) -> DiscoveryDecision:
     policy = TrackPolicy.from_path(policy_path)
     repo = ensure_repository(appledb_repo)
     require_origin(repo, _APPLEDB_REPOSITORY, "AppleDB")
     commit = resolve_commit(repo, appledb_commit)
-    observed = _observed_sources(ipsw_sources, policy.appledb_platform)
-    candidates = _appledb_candidates(repo, commit, policy)
+    observed = _load_observed(policy, ipsw_sources, ota_sources)
+    appledb_candidates = _appledb_candidates(repo, commit, policy)
     known_builds, manifest_edges = _manifest_inventory(manifests_dir, policy)
 
-    by_build = {candidate.metadata.build: candidate for candidate in candidates}
+    by_build = {candidate.metadata.build: candidate for candidate in appledb_candidates}
     anchor_candidate = by_build.get(policy.anchor.build)
     if anchor_candidate is None:
-        raise CatalogError("track anchor has no compatible AppleDB IPSW record")
+        raise CatalogError("track anchor has no compatible AppleDB firmware record")
     if anchor_candidate.metadata != policy.anchor:
         raise CatalogError("AppleDB anchor metadata differs from the track policy")
-    planned = _plan_candidate_edges(policy, candidates, known_builds, manifest_edges)
-    latest_candidate = max(candidates, key=lambda candidate: candidate.metadata.released_at)
-    selected_builds = frozenset(
-        {
-            policy.anchor.build,
-            latest_candidate.metadata.build,
-            *(candidate.metadata.build for edge in planned for candidate in edge),
-        }
+    pallas_candidates, deferred = _pallas_candidates(policy, pallas_sources, frozenset(by_build))
+    candidates = tuple(
+        sorted(
+            (*appledb_candidates, *pallas_candidates),
+            key=lambda candidate: candidate.metadata.released_at,
+        )
     )
-    selected = _select_releases(candidates, selected_builds, observed, policy.device)
+    # The anchor may be unpublished: it then starts the track, and older builds are skipped.
+    planning_known = known_builds | {policy.anchor.build}
+    planned, blocked = _plan_with_pallas(policy, candidates, planning_known, manifest_edges)
+    blocked_builds = {item.build for item in blocked}
+    planned_candidates = tuple(
+        candidate for candidate in candidates if candidate.metadata.build not in blocked_builds
+    )
+    latest_candidate = max(planned_candidates, key=lambda candidate: candidate.metadata.released_at)
+
+    selected: dict[tuple[str, SourceKind], AppleDBRelease] = {}
+
+    def select(candidate: AppleDBCandidate, kind: SourceKind) -> AppleDBRelease:
+        key = (candidate.metadata.build, kind)
+        if key not in selected:
+            if candidate.origin == "pallas":
+                selected[key] = candidate.select(policy.device, kind)
+            else:
+                selected[key] = _require_observation(candidate, kind, observed, policy.device)
+        return selected[key]
+
     edges = tuple(
         DiscoveryEdge(
-            previous=selected[previous.metadata.build],
-            next=selected[next_release.metadata.build],
+            previous=select(previous, _edge_kind(previous, next_release)),
+            next=select(next_release, _edge_kind(previous, next_release)),
         )
         for previous, next_release in planned
+    )
+    anchor = select(anchor_candidate, anchor_candidate.preferred_kind)
+    latest = select(latest_candidate, latest_candidate.preferred_kind)
+    used = sorted(
+        {release.metadata.build for release in selected.values() if release.origin == "pallas"}
     )
     return DiscoveryDecision(
         track=policy,
         appledb_commit=commit,
-        anchor=selected[policy.anchor.build],
-        latest=selected[latest_candidate.metadata.build],
+        anchor=anchor,
+        latest=latest,
         edges=edges,
         observed_source_count=len(observed),
         selected_source_count=len(selected),
+        pallas_queried=bool(pallas_sources),
+        pallas_used=tuple(used),
+        pallas_deferred=tuple(sorted((*deferred, *blocked), key=lambda item: item.build)),
     )

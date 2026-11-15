@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,6 +54,30 @@ def _source(
         "size": 1000 + len(release.build),
         "prerequisiteBuild": {"Builds": None},
     }
+
+
+def _ota_url(build: str) -> str:
+    digest = hashlib.sha1(build.encode(), usedforsecurity=False).hexdigest()
+    return f"https://updates.cdn-apple.com/fixture/com_apple_MobileAsset_MacSoftwareUpdate/{digest}.zip"
+
+
+def _ota_source(
+    release: _Release,
+    *,
+    device: str = "Mac1,1",
+    prerequisite: str | None = None,
+    sha256: str | None = None,
+) -> JsonObject:
+    source: JsonObject = {
+        "type": "ota",
+        "deviceMap": [device],
+        "links": [{"url": _ota_url(release.build), "active": True}],
+        "hashes": {"sha2-256": sha256 or release.build.lower().rjust(64, "e")},
+        "size": 5000 + len(release.build),
+    }
+    if prerequisite is not None:
+        source["prerequisiteBuild"] = prerequisite
+    return source
 
 
 def _appledb_record(
@@ -229,6 +254,12 @@ def _discover(fixture: _Fixture):  # noqa: ANN202
     )
 
 
+def _edge_builds(decision: JsonObject) -> list[tuple[str, str]]:
+    edges = decision["edges"]
+    assert isinstance(edges, list)
+    return [(edge["from"]["build"], edge["to"]["build"]) for edge in edges]
+
+
 def test_discover_reports_current_anchor_with_exact_source_identity(tmp_path: Path) -> None:
     fixture = _fixture(tmp_path)
 
@@ -245,6 +276,7 @@ def test_discover_reports_current_anchor_with_exact_source_identity(tmp_path: Pa
     assert anchor["build"] == "A1"
     assert anchor["beta"] is True
     assert anchor["source"] == {
+        "kind": "ipsw",
         "input": "Device1,1_27.0_A1_Restore.ipsw",
         "url": "https://updates.cdn-apple.com/fixture/Device1,1_27.0_A1_Restore.ipsw",
         "sha256": "a1".ljust(64, "0"),
@@ -402,11 +434,35 @@ def test_discover_rejects_wrong_predecessor_for_a_merged_build(tmp_path: Path) -
         _discover(fixture)
 
 
-def test_discover_rejects_anchor_without_manifest_endpoint(tmp_path: Path) -> None:
-    fixture = _fixture(tmp_path)
-    _write_json(fixture.manifests / "baseline.json", _manifest("A0", "OTHER"))
+def test_discover_starts_from_an_unpublished_anchor(tmp_path: Path) -> None:
+    next_release = _Release("27.0 beta 6", "A2", "2026-08-17", beta=True)
+    fixture = _fixture(tmp_path, (_BASELINE, next_release))
+    _write_json(fixture.manifests / "baseline.json", _manifest("Z0", "Z1"))
 
-    with pytest.raises(CatalogError, match="anchor is not backed"):
+    decision = _discover(fixture).to_object()
+
+    assert _edge_builds(decision) == [("A1", "A2")]
+
+
+def test_discover_starts_a_new_train_from_an_unpublished_final_anchor(tmp_path: Path) -> None:
+    older = _Release("27.0.1", "B0", "2026-07-01")
+    anchor = _Release("27.0.2", "B1", "2026-07-20")
+    rc = _Release("27.0.3 RC", "B2", "2026-08-03", rc=True)
+    final = _Release("27.0.3", "B3", "2026-08-10")
+    fixture = _fixture(tmp_path, (older, anchor, rc, final), policy=_policy(anchor))
+    _write_json(fixture.manifests / "baseline.json", _manifest("Z0", "Z1"))
+
+    decision = _discover(fixture).to_object()
+
+    assert _edge_builds(decision) == [("B1", "B2"), ("B2", "B3")]
+
+
+def test_discover_rejects_an_unpublished_anchor_behind_merged_builds(tmp_path: Path) -> None:
+    next_release = _Release("27.0 beta 6", "A2", "2026-08-17", beta=True)
+    fixture = _fixture(tmp_path, (_BASELINE, next_release))
+    _write_json(fixture.manifests / "baseline.json", _manifest("A0", "A2"))
+
+    with pytest.raises(CatalogError, match="merged build A2 is missing expected edge A1 -> A2"):
         _discover(fixture)
 
 
@@ -475,7 +531,7 @@ def test_discover_rejects_compatible_source_without_release_date(tmp_path: Path)
     commit = commit_all(fixture.appledb, "add incomplete downloadable record")
     fixture = _Fixture(fixture.policy, fixture.manifests, fixture.appledb, commit, fixture.sources)
 
-    with pytest.raises(CatalogError, match="compatible IPSW source but no release date"):
+    with pytest.raises(CatalogError, match="compatible firmware source but no release date"):
         _discover(fixture)
 
 
@@ -595,3 +651,405 @@ def test_parse_captured_v3721_macos_inventory() -> None:
     assert beta.build == "26B5086k"
     beta_size = 26538648422
     assert beta_source.size == beta_size
+
+
+_MAC = "Mac1,1"
+_MAC_ANCHOR = _Release("27.1", "C1", "2026-09-01")
+
+
+def _macos_fixture(
+    tmp_path: Path,
+    records: dict[_Release, tuple[JsonObject, ...]],
+    *,
+    anchor: _Release = _MAC_ANCHOR,
+    ota_fallback: bool | None = True,
+) -> _Fixture:
+    policy = _policy(
+        anchor,
+        identifier="macos-27",
+        platform="macOS",
+        appledb_platform="macOS",
+        device=_MAC,
+    )
+    if ota_fallback is not None:
+        policy["ota_fallback"] = ota_fallback
+    policy_path = tmp_path / "track.json"
+    _write_json(policy_path, policy)
+    manifests = tmp_path / "manifests"
+    _write_json(manifests / "baseline.json", _manifest("Z0", "Z1", platform="macOS"))
+    appledb = tmp_path / "appledb"
+    init_repo(appledb)
+    git(appledb, "remote", "add", "origin", _APPLEDB_ORIGIN)
+    for release, sources in records.items():
+        record = _appledb_record(release, appledb_platform="macOS", device=_MAC)
+        record["sources"] = list(sources)
+        _write_json(appledb / f"osFiles/macOS/26x - 27.x/{release.build}.json", record)
+    commit = commit_all(appledb, "AppleDB fixture")
+    ipsw_sources = tmp_path / "ipsw-sources.json"
+    _write_json(ipsw_sources, _kind_envelope(records, "ipsw"))
+    _write_json(tmp_path / "ota-sources.json", _kind_envelope(records, "ota"))
+    return _Fixture(policy_path, manifests, appledb, commit, ipsw_sources)
+
+
+def _first_url(source: JsonObject) -> str:
+    links = source["links"]
+    assert isinstance(links, list)
+    assert isinstance(links[0], dict)
+    return str(links[0]["url"])
+
+
+def _sha256(source: JsonObject) -> str:
+    hashes = source["hashes"]
+    assert isinstance(hashes, dict)
+    return str(hashes["sha2-256"])
+
+
+def _kind_envelope(records: dict[_Release, tuple[JsonObject, ...]], kind: str) -> JsonObject:
+    """Builds the ipsw CLI inventory of full sources of one kind, as `dl appledb --json` does."""
+    rows = [
+        (release, source)
+        for release, sources in records.items()
+        for source in sources
+        if source["type"] == kind and (kind == "ipsw" or "prerequisiteBuild" not in source)
+    ]
+    return {
+        "schema_version": 1,
+        "releases": [
+            {
+                "os": "macOS",
+                "version": release.version,
+                "build": release.build,
+                "release_date": release.released,
+                "channel": "beta" if release.beta else "rc" if release.rc else "release",
+                "artifacts": [
+                    {
+                        "source_type": kind,
+                        "delivery": "full",
+                        "prerequisite_builds": [],
+                        "devices": source["deviceMap"],
+                        "active_url": _first_url(source),
+                        "sha256": _sha256(source),
+                        "sha1": None,
+                        "size": source["size"],
+                    }
+                ],
+            }
+            for release, source in rows
+        ],
+    }
+
+
+def _discover_with_ota(fixture: _Fixture, ota_sources: Path | None = None):  # noqa: ANN202
+    return discover(
+        fixture.policy,
+        fixture.manifests,
+        fixture.appledb,
+        fixture.commit,
+        fixture.sources,
+        ota_sources=ota_sources or fixture.sources.with_name("ota-sources.json"),
+    )
+
+
+def test_policy_accepts_ota_fallback_only_for_macos() -> None:
+    policy = _policy(_MAC_ANCHOR, identifier="macos-27", platform="macOS", appledb_platform="macOS")
+    policy["ota_fallback"] = True
+    assert TrackPolicy.from_object(policy).ota_fallback is True
+
+    ios_policy = _policy()
+    ios_policy["ota_fallback"] = True
+    with pytest.raises(CatalogError, match="only reviewed for macOS"):
+        TrackPolicy.from_object(ios_policy)
+
+    policy["ota_fallback"] = "yes"
+    with pytest.raises(CatalogError, match="ota_fallback must be a boolean"):
+        TrackPolicy.from_object(policy)
+
+
+def test_discover_ignores_ota_only_builds_without_fallback(tmp_path: Path) -> None:
+    ota_only = _Release("27.1.1", "C2", "2026-09-08")
+    fixture = _macos_fixture(
+        tmp_path,
+        {
+            _MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC),),
+            ota_only: (_ota_source(ota_only),),
+        },
+        ota_fallback=None,
+    )
+
+    assert _discover(fixture).status == "current"
+
+
+def test_discover_diffs_ota_only_builds_against_full_otas(tmp_path: Path) -> None:
+    rc = _Release("27.1.1 RC", "C2", "2026-09-08", rc=True)
+    final = _Release("27.1.1", "C3", "2026-09-15")
+    fixture = _macos_fixture(
+        tmp_path,
+        {
+            _MAC_ANCHOR: (
+                _source(_MAC_ANCHOR, device=_MAC),
+                _ota_source(_MAC_ANCHOR),
+                _ota_source(_MAC_ANCHOR, prerequisite="C0"),
+            ),
+            rc: (_ota_source(rc), _ota_source(rc, prerequisite="C1")),
+            final: (_ota_source(final),),
+        },
+    )
+
+    decision = _discover_with_ota(fixture).to_object()
+
+    assert _edge_builds(decision) == [("C1", "C2"), ("C2", "C3")]
+    edges = decision["edges"]
+    assert isinstance(edges, list)
+    assert [edge["kind"] for edge in edges] == ["ota", "ota"]
+    assert edges[0]["from"]["source"] == {
+        "kind": "ota",
+        "input": "Mac1,1_27.1_C1_OTA.zip",
+        "url": _ota_url("C1"),
+        "size": 5002,
+        "sha256": "c1".rjust(64, "e"),
+    }
+    assert edges[1]["to"]["source"]["input"] == "Mac1,1_27.1.1_C3_OTA.zip"
+    anchor = decision["anchor"]
+    assert isinstance(anchor, dict)
+    assert anchor["source"]["kind"] == "ipsw"
+    assert decision["source_inventory"] == {"observed": 4, "selected": 4}
+
+
+def test_discover_prefers_ipsws_when_both_builds_have_one(tmp_path: Path) -> None:
+    final = _Release("27.1.1", "C2", "2026-09-08")
+    fixture = _macos_fixture(
+        tmp_path,
+        {
+            release: (_source(release, device=_MAC), _ota_source(release))
+            for release in (_MAC_ANCHOR, final)
+        },
+    )
+
+    decision = _discover_with_ota(fixture).to_object()
+
+    edges = decision["edges"]
+    assert isinstance(edges, list)
+    assert [edge["kind"] for edge in edges] == ["ipsw"]
+    assert edges[0]["to"]["source"]["input"] == "Mac1,1_27.1.1_C2_Restore.ipsw"
+
+
+def test_discover_rejects_an_edge_without_a_shared_source_kind(tmp_path: Path) -> None:
+    ota_only = _Release("27.1.1", "C2", "2026-09-08")
+    fixture = _macos_fixture(
+        tmp_path,
+        {
+            _MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC),),
+            ota_only: (_ota_source(ota_only),),
+        },
+    )
+
+    with pytest.raises(CatalogError, match="edge C1 -> C2 has no firmware source kind"):
+        _discover_with_ota(fixture)
+
+
+def test_discover_rejects_ota_hash_mutation(tmp_path: Path) -> None:
+    ota_only = _Release("27.1.1", "C2", "2026-09-08")
+    fixture = _macos_fixture(
+        tmp_path,
+        {
+            _MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC), _ota_source(_MAC_ANCHOR)),
+            ota_only: (_ota_source(ota_only),),
+        },
+    )
+    ota_sources = tmp_path / "ota-sources.json"
+    envelope = json.loads(ota_sources.read_text())
+    envelope["releases"][1]["artifacts"][0]["sha256"] = "f" * 64
+    _write_json(ota_sources, envelope)
+
+    with pytest.raises(CatalogError, match="source facts differ for build C2"):
+        _discover_with_ota(fixture)
+
+
+def test_discover_rejects_ota_url_not_named_by_digest(tmp_path: Path) -> None:
+    ota_only = _Release("27.1.1", "C2", "2026-09-08")
+    renamed = _ota_source(ota_only)
+    renamed["links"] = [{"url": "https://updates.cdn-apple.com/fixture/C2.zip", "active": True}]
+    fixture = _macos_fixture(
+        tmp_path,
+        {
+            _MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC), _ota_source(_MAC_ANCHOR)),
+            ota_only: (renamed,),
+        },
+    )
+
+    with pytest.raises(CatalogError, match="unsupported OTA filename"):
+        _discover_with_ota(fixture)
+
+
+def test_discover_rejects_multiple_full_otas_for_the_device(tmp_path: Path) -> None:
+    ota_only = _Release("27.1.1", "C2", "2026-09-08")
+    second = _ota_source(ota_only)
+    second["links"] = [{"url": _ota_url("C2-second"), "active": True}]
+    fixture = _macos_fixture(
+        tmp_path,
+        {
+            _MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC), _ota_source(_MAC_ANCHOR)),
+            ota_only: (_ota_source(ota_only), second),
+        },
+    )
+
+    with pytest.raises(CatalogError, match="multiple full OTA sources for Mac1,1"):
+        _discover_with_ota(fixture)
+
+
+def test_discover_requires_ota_inventory_exactly_with_fallback(tmp_path: Path) -> None:
+    fixture = _macos_fixture(tmp_path, {_MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC),)})
+    with pytest.raises(CatalogError, match="OTA source inventory is required exactly"):
+        _discover(fixture)
+
+    no_fallback = _macos_fixture(
+        tmp_path / "plain",
+        {_MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC),)},
+        ota_fallback=None,
+    )
+    with pytest.raises(CatalogError, match="OTA source inventory is required exactly"):
+        _discover_with_ota(no_fallback)
+
+
+def _pallas_file(tmp_path: Path, *releases: _Release) -> Path:
+    """Writes an `ipsw dl ota --json` envelope serving one full OTA per release."""
+    otas = [
+        {
+            "os": "macOS",
+            "version": release.version.split(" ", maxsplit=1)[0],
+            "version_extra": None,
+            "build": release.build,
+            "channel": {"kind": "rc" if release.rc else "beta" if release.beta else "release"},
+            "posting_date": release.released,
+            "delivery": "full",
+            "prerequisite": None,
+            "supported_devices": [_MAC],
+            "url": _ota_url(release.build),
+            "download_size": 7000,
+            "sha1": None,
+            "sha256": release.build.lower().rjust(64, "d"),
+        }
+        for release in releases
+    ]
+    path = tmp_path / "pallas.json"
+    _write_json(path, {"schema_version": 1, "otas": otas})
+    return path
+
+
+def _discover_with_pallas(fixture: _Fixture, pallas: Path):  # noqa: ANN202
+    return discover(
+        fixture.policy,
+        fixture.manifests,
+        fixture.appledb,
+        fixture.commit,
+        fixture.sources,
+        ota_sources=fixture.sources.with_name("ota-sources.json"),
+        pallas_sources=(pallas,),
+    )
+
+
+def _mac_anchor_records() -> dict[_Release, tuple[JsonObject, ...]]:
+    return {_MAC_ANCHOR: (_source(_MAC_ANCHOR, device=_MAC), _ota_source(_MAC_ANCHOR))}
+
+
+def test_discover_generates_a_build_apple_serves_before_appledb_records_it(
+    tmp_path: Path,
+) -> None:
+    fresh = _Release("27.1.1 RC", "C2", "2026-09-08", rc=True)
+    fixture = _macos_fixture(tmp_path, _mac_anchor_records())
+
+    decision = _discover_with_pallas(fixture, _pallas_file(tmp_path, fresh)).to_object()
+
+    assert _edge_builds(decision) == [("C1", "C2")]
+    edges = decision["edges"]
+    assert isinstance(edges, list)
+    destination = edges[0]["to"]
+    assert destination["version"] == "27.1.1 RC"
+    assert destination["metadata_source"] == "pallas"
+    assert destination["appledb_path"] is None
+    assert destination["source"] == {
+        "kind": "ota",
+        "input": "Mac1,1_27.1.1_C2_OTA.zip",
+        "url": _ota_url("C2"),
+        "size": 7000,
+        "sha256": "c2".rjust(64, "d"),
+    }
+    assert edges[0]["from"]["metadata_source"] == "appledb"
+    assert decision["pallas"] == {"queried": True, "used": ["C2"], "deferred": []}
+
+
+def test_discover_keeps_appledb_as_the_record_once_it_has_the_build(tmp_path: Path) -> None:
+    final = _Release("27.1.1", "C2", "2026-09-08")
+    records = _mac_anchor_records()
+    records[final] = (_ota_source(final),)
+    fixture = _macos_fixture(tmp_path, records)
+    apple_label = _Release("27.1.1 RC", "C2", "2026-09-07", rc=True)
+
+    decision = _discover_with_pallas(fixture, _pallas_file(tmp_path, apple_label)).to_object()
+
+    edges = decision["edges"]
+    assert isinstance(edges, list)
+    assert edges[0]["to"]["version"] == "27.1.1"
+    assert edges[0]["to"]["metadata_source"] == "appledb"
+    assert decision["pallas"] == {"queried": True, "used": [], "deferred": []}
+
+
+def test_discover_never_starts_an_edge_from_a_pallas_only_build(tmp_path: Path) -> None:
+    rc = _Release("27.1.1 RC", "C2", "2026-09-08", rc=True)
+    final = _Release("27.1.1", "C3", "2026-09-15")
+    fixture = _macos_fixture(tmp_path, _mac_anchor_records())
+
+    decision = _discover_with_pallas(fixture, _pallas_file(tmp_path, rc, final)).to_object()
+
+    assert _edge_builds(decision) == [("C1", "C2")]
+    assert decision["pallas"] == {
+        "queried": True,
+        "used": ["C2"],
+        "deferred": [{"build": "C3", "reason": "its predecessor is Pallas-only"}],
+    }
+    latest = decision["latest"]
+    assert isinstance(latest, dict)
+    assert latest["build"] == "C2"
+
+
+def test_discover_rejects_an_appledb_build_after_a_pallas_only_build(tmp_path: Path) -> None:
+    skipped = _Release("27.1.1", "C2", "2026-09-08")
+    later = _Release("27.1.2", "C3", "2026-09-15")
+    records = _mac_anchor_records()
+    records[later] = (_ota_source(later),)
+    fixture = _macos_fixture(tmp_path, records)
+
+    with pytest.raises(CatalogError, match="AppleDB build C3 follows a build only Pallas serves"):
+        _discover_with_pallas(fixture, _pallas_file(tmp_path, skipped))
+
+
+def test_discover_defers_a_pallas_build_with_an_unusable_url(tmp_path: Path) -> None:
+    fresh = _Release("27.1.1", "C2", "2026-09-08")
+    fixture = _macos_fixture(tmp_path, _mac_anchor_records())
+    pallas = _pallas_file(tmp_path, fresh)
+    envelope = json.loads(pallas.read_text())
+    envelope["otas"][0]["url"] = "https://example.com/fixture.zip"
+    _write_json(pallas, envelope)
+
+    decision = _discover_with_pallas(fixture, pallas).to_object()
+
+    assert decision["status"] == "current"
+    pallas_state = decision["pallas"]
+    assert isinstance(pallas_state, dict)
+    assert pallas_state["used"] == []
+    assert "unsupported active URL" in pallas_state["deferred"][0]["reason"]
+
+
+def test_discover_requires_ota_fallback_for_pallas(tmp_path: Path) -> None:
+    fixture = _macos_fixture(tmp_path, _mac_anchor_records(), ota_fallback=None)
+    pallas = _pallas_file(tmp_path, _Release("27.1.1", "C2", "2026-09-08"))
+
+    with pytest.raises(CatalogError, match="Pallas OTA inventories need"):
+        discover(
+            fixture.policy,
+            fixture.manifests,
+            fixture.appledb,
+            fixture.commit,
+            fixture.sources,
+            pallas_sources=(pallas,),
+        )

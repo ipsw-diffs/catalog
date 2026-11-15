@@ -11,7 +11,10 @@ from ipsw_diff_catalog.discovery import discover
 from ipsw_diff_catalog.model import CatalogError, MigrationSpec
 from ipsw_diff_catalog.planner import plan
 from ipsw_diff_catalog.reconcile import reconcile
-from ipsw_diff_catalog.release_metadata import import_release_metadata
+from ipsw_diff_catalog.release_metadata import (
+    AppleDBCoverageMissingError,
+    import_release_metadata,
+)
 from ipsw_diff_catalog.render import render
 from ipsw_diff_catalog.stage import (
     stage,
@@ -20,6 +23,30 @@ from ipsw_diff_catalog.stage import (
     validate_staged_batch,
 )
 from ipsw_diff_catalog.verify import materialize_manifest, record, verify
+
+
+def _add_discover_parser(commands: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    discover_parser = commands.add_parser(
+        "discover",
+        help="queue every missing AppleDB edge after one immutable track anchor",
+    )
+    discover_parser.add_argument("--policy", type=Path, required=True)
+    discover_parser.add_argument("--manifests-dir", type=Path, required=True)
+    discover_parser.add_argument("--appledb-repo", type=Path, required=True)
+    discover_parser.add_argument("--appledb-commit", required=True)
+    discover_parser.add_argument("--ipsw-sources", type=Path, required=True)
+    discover_parser.add_argument(
+        "--ota-sources",
+        type=Path,
+        help="full-OTA inventory from `ipsw dl appledb --type ota`; required with ota_fallback",
+    )
+    discover_parser.add_argument(
+        "--pallas-sources",
+        type=Path,
+        action="append",
+        default=[],
+        help="live OTA inventory from `ipsw dl ota --json`; repeat for each audience query",
+    )
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -84,15 +111,7 @@ def _parser() -> argparse.ArgumentParser:
     audit_parser.add_argument("--entries-dir", type=Path, default=Path("entries"))
     audit_parser.add_argument("--specs-dir", type=Path, default=Path("specs"))
 
-    discover_parser = commands.add_parser(
-        "discover",
-        help="queue every missing AppleDB edge after one immutable track anchor",
-    )
-    discover_parser.add_argument("--policy", type=Path, required=True)
-    discover_parser.add_argument("--manifests-dir", type=Path, required=True)
-    discover_parser.add_argument("--appledb-repo", type=Path, required=True)
-    discover_parser.add_argument("--appledb-commit", required=True)
-    discover_parser.add_argument("--ipsw-sources", type=Path, required=True)
+    _add_discover_parser(commands)
 
     census_parser = commands.add_parser(
         "census",
@@ -311,6 +330,8 @@ def _run(arguments: argparse.Namespace) -> None:
             arguments.appledb_repo,
             arguments.appledb_commit,
             arguments.ipsw_sources,
+            ota_sources=arguments.ota_sources,
+            pallas_sources=tuple(arguments.pallas_sources),
         )
         print(decision.to_json())
         return
@@ -376,9 +397,16 @@ def _dispatch(arguments: argparse.Namespace) -> None:
         _run(arguments)
 
 
+# Exit status for "AppleDB has not recorded a new build yet": callers retry instead of failing.
+EXIT_WAIT_FOR_APPLEDB = 3
+
+
 def main() -> None:
     try:
         _dispatch(_parser().parse_args())
+    except AppleDBCoverageMissingError as error:
+        print(f"waiting for AppleDB: {error}", file=sys.stderr)
+        raise SystemExit(EXIT_WAIT_FOR_APPLEDB) from error
     except CatalogError as error:
         print(f"error: {error}", file=sys.stderr)
         raise SystemExit(1) from error
