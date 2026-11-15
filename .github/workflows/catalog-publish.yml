@@ -2,9 +2,9 @@ name: Publish merged shard diffs to catalog
 
 on:
   schedule:
-    # Every five minutes: shard OTA edges merge unattended, and each merge should reach the
-    # catalog and the social publisher without waiting an hour.
-    - cron: "*/5 * * * *"
+    # A backstop only: catalog-poll.yml dispatches this within minutes of a shard merge, while
+    # GitHub runs this schedule hours late.
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions: {}

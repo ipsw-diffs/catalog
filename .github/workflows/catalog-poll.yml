@@ -1,0 +1,51 @@
+name: Poll shards for catalog publication
+
+on:
+  schedule:
+    # Only restarts the poller if its chain of self-dispatches breaks; GitHub runs these late.
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: catalog-poll
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    # Polls every five minutes for just under the six-hour job limit, then starts its successor.
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    permissions:
+      actions: write # dispatches catalog-publish.yml and the next poller
+      contents: read
+    steps:
+      - name: Require default-branch event
+        env:
+          DISPATCH_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$DISPATCH_REF" != refs/heads/main ]]; then
+            echo "catalog polling must run from main, got $DISPATCH_REF" >&2
+            exit 1
+          fi
+
+      - name: Checkout catalog
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Poll every five minutes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLL_INTERVAL: "300"
+          POLL_DURATION: "20400"
+          REPUBLISH_INTERVAL: "1800"
+        run: bash scripts/poll-catalog.sh
+
+      - name: Start the next poller
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run catalog-poll.yml --repo "$GITHUB_REPOSITORY" --ref main

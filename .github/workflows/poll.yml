@@ -1,0 +1,113 @@
+name: Poll for new firmware
+
+on:
+  workflow_call:
+    inputs:
+      policy-path:
+        description: Repository-relative track policy path
+        required: true
+        type: string
+      manifests-dir:
+        description: Repository-relative merged manifests directory
+        required: true
+        type: string
+      discover-workflow:
+        description: The shard's discovery workflow file, dispatched for each new build
+        required: true
+        type: string
+      poll-workflow:
+        description: The shard's polling workflow file, dispatched again before this job ends
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  poll:
+    # GitHub runs scheduled workflows hours late, so one job polls every five minutes for
+    # just under the six-hour job limit and then starts its successor.
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    permissions:
+      actions: write # dispatches discovery and the next poller
+      contents: read
+      issues: read
+    steps:
+      - name: Checkout shard
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: shard
+          persist-credentials: false
+
+      - name: Checkout poller at called workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: catalog
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.3"
+          enable-cache: true
+
+      - name: Sync locked detector environment
+        working-directory: catalog
+        run: uv sync --locked --all-groups
+
+      - name: Cache AppleDB
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ipsw-config/appledb
+          key: appledb-v2-${{ runner.os }}
+
+      - name: Install latest stable ipsw (checksum verified)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash catalog/scripts/install-latest-ipsw.sh
+
+      - name: Resolve reviewed track selector
+        env:
+          POLICY_PATH: ${{ inputs.policy-path }}
+        run: |
+          set -euo pipefail
+          policy="shard/$POLICY_PATH"
+          {
+            printf 'TRACK_ID=%s\n' "$(jq --exit-status --raw-output \
+              '.id | select(test("^[a-z0-9]+(-[a-z0-9]+)*$"))' "$policy")"
+            printf 'APPLEDB_PLATFORM=%s\n' "$(jq --exit-status --raw-output \
+              '.appledb_platform | select(. == "iOS" or . == "iPadOS" or . == "macOS")' \
+              "$policy")"
+            printf 'DEVICE=%s\n' "$(jq --exit-status --raw-output \
+              '.device | select(test("^[A-Za-z0-9][A-Za-z0-9,._-]*$"))' "$policy")"
+            printf 'MAJOR_VERSION=%s\n' "$(jq --exit-status --raw-output \
+              '.major_version | select(type == "number" and floor == . and . > 0)' "$policy")"
+          } >> "$GITHUB_ENV"
+          ota_fallback="$(jq --raw-output \
+            'if has("ota_fallback") then .ota_fallback else false end' "$policy")"
+          case "$ota_fallback" in
+            true | false) printf 'OTA_FALLBACK=%s\n' "$ota_fallback" >> "$GITHUB_ENV" ;;
+            *) echo "track policy ota_fallback must be a boolean" >&2; exit 1 ;;
+          esac
+
+      - name: Poll every five minutes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLICY_PATH: ${{ inputs.policy-path }}
+          MANIFESTS_DIR: ${{ inputs.manifests-dir }}
+          DISCOVER_WORKFLOW: ${{ inputs.discover-workflow }}
+          POLL_INTERVAL: "300"
+          # 5 h 30 min, leaving time for setup and the successor dispatch within the job limit.
+          POLL_DURATION: "19800"
+        run: bash catalog/scripts/poll-discovery.sh
+
+      - name: Start the next poller
+        # Not after a cancellation, so cancelling a poller stops the chain; the shard's slow
+        # schedule starts a new one later.
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLL_WORKFLOW: ${{ inputs.poll-workflow }}
+        run: gh workflow run "$POLL_WORKFLOW" --repo "$GITHUB_REPOSITORY" --ref main
