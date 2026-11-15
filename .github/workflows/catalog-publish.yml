@@ -2,7 +2,9 @@ name: Publish merged shard diffs to catalog
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    # Every five minutes: shard OTA edges merge unattended, and each merge should reach the
+    # catalog and the social publisher without waiting an hour.
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions: {}
@@ -127,6 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
+      actions: write # dispatches the social publisher after merging
       contents: write
       pull-requests: write
     steps:
@@ -176,17 +179,31 @@ jobs:
           git -C "$RUNNER_TEMP/appledb" checkout --quiet --detach "$APPLEDB_COMMIT"
 
       - name: Regenerate labels and deterministic indexes
+        id: labels
         env:
           APPLEDB_COMMIT: ${{ needs.detect.outputs.appledb_commit }}
         run: |
           set -euo pipefail
+          # A shard can publish a build from Apple's Pallas service before AppleDB records it.
+          # Exit status 3 means exactly that, so wait for a later run instead of failing.
+          status=0
           uv run ipsw-diff-catalog release-metadata \
             --appledb-repo "$RUNNER_TEMP/appledb" \
             --appledb-commit "$APPLEDB_COMMIT" \
-            --output metadata/releases.json
+            --output metadata/releases.json || status=$?
+          if [ "$status" -eq 3 ]; then
+            echo "::notice::AppleDB has not recorded a merged build yet; publication waits"
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
           uv run ipsw-diff-catalog render
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
 
       - name: Reject unexpected working-tree changes
+        if: steps.labels.outputs.ready == 'true'
         run: |
           set -euo pipefail
           changed=$({
@@ -205,6 +222,7 @@ jobs:
           done <<< "$changed"
 
       - name: Validate complete publication candidate
+        if: steps.labels.outputs.ready == 'true'
         env:
           APPLEDB_COMMIT: ${{ needs.detect.outputs.appledb_commit }}
         run: |
@@ -222,6 +240,7 @@ jobs:
           uv run ipsw-diff-catalog audit
 
       - name: Create unsigned non-overwriting publication commit
+        if: steps.labels.outputs.ready == 'true'
         id: commit
         env:
           APPLEDB_COMMIT: ${{ needs.detect.outputs.appledb_commit }}
@@ -269,11 +288,13 @@ jobs:
             echo
             printf -- "- \`AppleDB\`: \`%s\`\n" "$APPLEDB_COMMIT"
             echo
-            echo 'The commit is unsigned. Merge remains manual; merging announces the new entries.'
+            echo 'The commit is unsigned. This workflow merges it after the checks above pass, then starts the social publisher for the new entries.'
           } > "$RUNNER_TEMP/pull-request.md"
           printf 'branch=%s\n' "$branch" >> "$GITHUB_OUTPUT"
 
-      - name: Push branch and open ready pull request
+      - name: Push branch and open pull request
+        id: pull_request
+        if: steps.labels.outputs.ready == 'true'
         env:
           BRANCH: ${{ steps.commit.outputs.branch }}
           GH_TOKEN: ${{ github.token }}
@@ -285,4 +306,27 @@ jobs:
             --head "$BRANCH" \
             --title 'Catalog merged shard diffs' \
             --body-file "$RUNNER_TEMP/pull-request.md")
-          printf 'ready pull request: %s\n' "$url"
+          printf 'pull request: %s\n' "$url"
+          printf 'url=%s\n' "$url" >> "$GITHUB_OUTPUT"
+
+      - name: Merge the validated pull request
+        if: steps.labels.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.pull_request.outputs.url }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR_URL" --squash --match-head-commit "$(git rev-parse HEAD)"
+          gh pr view "$PR_URL" --json state,mergeCommit |
+            jq --exit-status \
+              'select(.state == "MERGED" and (.mergeCommit.oid | test("^[0-9a-f]{40}$")))' \
+              >/dev/null
+
+      - name: Start the social publisher
+        if: steps.labels.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # A merge made with the job token does not fire social.yml's push trigger.
+          gh workflow run social.yml --ref main -f mode=publish

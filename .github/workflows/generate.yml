@@ -11,9 +11,14 @@ on:
         description: Repository-relative merged manifests directory
         required: true
         type: string
+      input-kind:
+        description: Kind of the first queued edge's inputs from discovery, ipsw or ota
+        required: false
+        type: string
+        default: ipsw
     outputs:
       pull-request-url:
-        description: Ready review pull request opened for the generated edge
+        description: Pull request opened and merged for the generated edge
         value: ${{ jobs.generate.outputs.pull-request-url }}
 
 permissions: {}
@@ -24,16 +29,19 @@ concurrency:
 
 jobs:
   generate:
-    # The pinned apfs-fuse commit requires CMake compatibility that Ubuntu 26.04 no longer has.
-    runs-on: ubuntu-24.04
+    # OTA edges need Apple's RawImagePatch and aa, so they run on macOS. IPSW edges stay on
+    # Ubuntu 24.04: the pinned apfs-fuse commit needs CMake compatibility that 26.04 dropped.
+    runs-on: ${{ inputs.input-kind == 'ota' && 'macos-26' || 'ubuntu-24.04' }}
     timeout-minutes: 360
     permissions:
       contents: write
+      issues: write # opens the generation-failed issue that pauses retries
       pull-requests: write
     outputs:
       pull-request-url: ${{ steps.pull_request.outputs.url }}
     env:
       SYMBOLICATOR_COMMIT: 81178cfe6c8869612ef092f6471fce3e17d95b20
+      INPUT_KIND: ${{ inputs.input-kind }}
 
     steps:
       - name: Require default-branch dispatch
@@ -45,6 +53,10 @@ jobs:
             echo "generation must be dispatched from main, got $DISPATCH_REF" >&2
             exit 1
           fi
+          case "$INPUT_KIND" in
+            ipsw | ota) ;;
+            *) echo "unsupported input kind: $INPUT_KIND" >&2; exit 1 ;;
+          esac
 
       - name: Checkout shard
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -68,8 +80,8 @@ jobs:
           MANIFESTS_DIR: ${{ inputs.manifests-dir }}
         run: |
           set -euo pipefail
-          policy="$(realpath --canonicalize-existing "$GITHUB_WORKSPACE/$POLICY_PATH")"
-          manifests="$(realpath --canonicalize-existing "$GITHUB_WORKSPACE/$MANIFESTS_DIR")"
+          policy="$(realpath "$GITHUB_WORKSPACE/$POLICY_PATH")"
+          manifests="$(realpath "$GITHUB_WORKSPACE/$MANIFESTS_DIR")"
           test -f "$policy"
           test -d "$manifests"
           case "$policy" in
@@ -104,6 +116,16 @@ jobs:
              .device == $device and
              .major_version == $major and
              (.anchor | type == "object")' "$policy" >/dev/null
+          ota_fallback="$(jq --raw-output \
+            'if has("ota_fallback") then .ota_fallback else false end' "$policy")"
+          case "$ota_fallback" in
+            true | false) ;;
+            *) echo "track policy ota_fallback must be a boolean" >&2; exit 1 ;;
+          esac
+          if [ "$INPUT_KIND" = ota ] && [ "$ota_fallback" != true ]; then
+            echo "an OTA edge needs a track policy with ota_fallback" >&2
+            exit 1
+          fi
           manifests_relative="${manifests#"$GITHUB_WORKSPACE"/}"
           {
             printf 'CATALOG_COMMIT=%s\n' "$CATALOG_COMMIT"
@@ -115,13 +137,30 @@ jobs:
             printf 'POLICY_FILE=%s\n' "$policy"
             printf 'MANIFESTS_DIRECTORY=%s\n' "$manifests"
             printf 'MANIFESTS_RELATIVE=%s\n' "$manifests_relative"
+            printf 'OTA_FALLBACK=%s\n' "$ota_fallback"
           } >> "$GITHUB_ENV"
 
       - name: Free disk space
+        if: runner.os == 'Linux'
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           tool-cache: true
           swap-storage: false
+
+      - name: Free macOS disk space
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          # Two full OTAs and their extracted payloads need about 90 GB.
+          selected="$(xcode-select -p)"
+          selected="${selected%%.app/*}.app"
+          for app in /Applications/Xcode*.app; do
+            if [ "$app" != "$selected" ] && [ ! -L "$app" ]; then
+              sudo rm -rf "$app"
+            fi
+          done
+          sudo rm -rf "$HOME/Library/Android"
+          df -h /
 
       - name: Install uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -144,41 +183,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash catalog/scripts/install-latest-ipsw.sh
 
-      - name: Query complete exact-track IPSW source inventory
-        run: |
-          set -euo pipefail
-          config_dir="$RUNNER_TEMP/ipsw-config"
-          mkdir -p "$config_dir"
-          touch "$config_dir/config.yaml"
-          ipsw --config "$config_dir/config.yaml" dl appledb \
-            --os "$APPLEDB_PLATFORM" \
-            --device "$DEVICE" \
-            --version "$MAJOR_VERSION." \
-            --type ipsw \
-            --json \
-            --no-color > "$RUNNER_TEMP/ipsw-sources.json"
-          if ! jq --exit-status '
-            type == "object" and .schema_version == 1 and
-            (.releases | type == "array" and length > 0)
-          ' "$RUNNER_TEMP/ipsw-sources.json" >/dev/null; then
-            echo 'Expected nonempty ipsw AppleDB schema_version=1 releases envelope' >&2
-            exit 1
-          fi
-          appledb_commit="$(git -C "$config_dir/appledb" rev-parse HEAD)"
-          [[ "$appledb_commit" =~ ^[0-9a-f]{40}$ ]]
-          printf '%s\n' "$appledb_commit" > "$RUNNER_TEMP/appledb-commit"
+      - name: Query complete exact-track source inventories
+        run: bash catalog/scripts/query-source-inventories.sh
 
-      - name: Resolve the first reviewed queue edge and exact IPSWs
+      - name: Resolve the first reviewed queue edge and exact inputs
         working-directory: catalog
         run: |
           set -euo pipefail
           appledb_commit="$(cat "$RUNNER_TEMP/appledb-commit")"
+          inventories=()
+          while IFS= read -r argument; do
+            inventories+=("$argument")
+          done < "$RUNNER_TEMP/discovery-args"
           result="$(uv run ipsw-diff-catalog discover \
             --policy "$POLICY_FILE" \
             --manifests-dir "$MANIFESTS_DIRECTORY" \
             --appledb-repo "$RUNNER_TEMP/ipsw-config/appledb" \
             --appledb-commit "$appledb_commit" \
-            --ipsw-sources "$RUNNER_TEMP/ipsw-sources.json")"
+            "${inventories[@]}")"
           printf '%s\n' "$result" | tee "$RUNNER_TEMP/discovery-before.json"
           jq --exit-status \
             --arg track "$TRACK_ID" \
@@ -186,6 +208,7 @@ jobs:
             --arg device "$DEVICE" \
             --argjson major "$MAJOR_VERSION" \
             --arg appledb_commit "$appledb_commit" \
+            --arg kind "$INPUT_KIND" \
             '.status == "candidate" and
              .track_id == $track and
              .platform == $platform and
@@ -193,7 +216,10 @@ jobs:
              .major_version == $major and
              .appledb.commit == $appledb_commit and
              (.edges | length > 0) and
-             .edges[0].from.build != .edges[0].to.build' \
+             .edges[0].from.build != .edges[0].to.build and
+             .edges[0].kind == $kind and
+             .edges[0].from.source.kind == $kind and
+             .edges[0].to.source.kind == $kind' \
             "$RUNNER_TEMP/discovery-before.json"
 
           previous_build="$(jq --exit-status --raw-output '.edges[0].from.build' "$RUNNER_TEMP/discovery-before.json")"
@@ -217,8 +243,13 @@ jobs:
           [[ "$next_version" =~ ^[0-9]+(\.[0-9]+)*$ ]]
           [[ "$previous_label" =~ $safe_label ]]
           [[ "$next_label" =~ $safe_label ]]
-          [[ "$previous_input" =~ ^[A-Za-z0-9.,_+-]+\.ipsw$ ]]
-          [[ "$next_input" =~ ^[A-Za-z0-9.,_+-]+\.ipsw$ ]]
+          if [ "$INPUT_KIND" = ota ]; then
+            input_pattern='^[A-Za-z0-9.,_+-]+_OTA\.zip$'
+          else
+            input_pattern='^[A-Za-z0-9.,_+-]+\.ipsw$'
+          fi
+          [[ "$previous_input" =~ $input_pattern ]]
+          [[ "$next_input" =~ $input_pattern ]]
           [[ "$previous_input" == *"_${previous_build}_"* ]]
           [[ "$next_input" == *"_${next_build}_"* ]]
           [[ "$previous_url" =~ ^https://[^[:space:]]+$ ]]
@@ -272,6 +303,7 @@ jobs:
           fi
 
       - name: Install apfs-fuse
+        if: runner.os == 'Linux'
         env:
           APFS_FUSE_SHA: 66b86bd525e8cb90f9012543be89b1f092b75cf3
         run: |
@@ -299,6 +331,7 @@ jobs:
           test "$(git -C "$repo" rev-parse HEAD)" = "$SYMBOLICATOR_COMMIT"
 
       - name: Add swap
+        if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           swapdir=/mnt
@@ -318,7 +351,7 @@ jobs:
           sudo swapon "$swapfile"
           free -h
 
-      - name: Download and verify exact IPSWs
+      - name: Download and verify exact inputs
         run: |
           set -euo pipefail
           previous_dir="$RUNNER_TEMP/previous"
@@ -334,14 +367,19 @@ jobs:
             --output "$next" "$NEXT_URL"
           test -f "$previous"
           test -f "$next"
-          test "$(find "$previous_dir" -maxdepth 1 -type f -name '*.ipsw' | wc -l)" -eq 1
-          test "$(find "$next_dir" -maxdepth 1 -type f -name '*.ipsw' | wc -l)" -eq 1
-          test "$(stat --printf='%s' "$previous")" = "$PREVIOUS_SIZE"
-          test "$(stat --printf='%s' "$next")" = "$NEXT_SIZE"
-          printf '%s  %s\n' "$PREVIOUS_SHA256" "$previous" | sha256sum --check --strict
-          printf '%s  %s\n' "$NEXT_SHA256" "$next" | sha256sum --check --strict
+          test "$(find "$previous_dir" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1
+          test "$(find "$next_dir" -mindepth 1 -maxdepth 1 | wc -l)" -eq 1
+          test "$(wc -c < "$previous" | tr -d ' ')" = "$PREVIOUS_SIZE"
+          test "$(wc -c < "$next" | tr -d ' ')" = "$NEXT_SIZE"
+          printf '%s  %s\n' "$PREVIOUS_SHA256" "$previous" |
+            shasum --algorithm 256 --check --strict
+          printf '%s  %s\n' "$NEXT_SHA256" "$next" | shasum --algorithm 256 --check --strict
+          df -h "$RUNNER_TEMP"
 
       - name: Generate exact diff payload
+        env:
+          # Bounds the Go heap on the 7 GB macOS runner; an OTA diff peaked at 7.7 GB without it.
+          GOMEMLIMIT: ${{ inputs.input-kind == 'ota' && '3500MiB' || '' }}
         run: |
           set -euo pipefail
           output="$RUNNER_TEMP/generated"
@@ -506,12 +544,16 @@ jobs:
           test "$(git rev-parse "$SOURCE_COMMIT:$DIFF_NAME")" = \
             "$(git rev-parse "$publication_commit:diffs/$DIFF_NAME")"
 
+          inventories=()
+          while IFS= read -r argument; do
+            inventories+=("$argument")
+          done < "$RUNNER_TEMP/discovery-args"
           result="$(uv --directory catalog run ipsw-diff-catalog discover \
             --policy "$POLICY_FILE" \
             --manifests-dir "$MANIFESTS_DIRECTORY" \
             --appledb-repo "$RUNNER_TEMP/ipsw-config/appledb" \
             --appledb-commit "$(cat "$RUNNER_TEMP/appledb-commit")" \
-            --ipsw-sources "$RUNNER_TEMP/ipsw-sources.json")"
+            "${inventories[@]}")"
           printf '%s\n' "$result" | tee "$RUNNER_TEMP/discovery-after.json"
           jq --exit-status --arg build "$NEXT_BUILD" \
             '(.status == "current" or .status == "candidate") and
@@ -530,7 +572,7 @@ jobs:
           remote_tag="$(git ls-remote --tags origin "refs/tags/$SOURCE_TAG" | awk '{print $1}')"
           test "$remote_tag" = "$SOURCE_COMMIT"
 
-      - name: Open ready review pull request
+      - name: Open pull request
         id: pull_request
         env:
           GH_TOKEN: ${{ github.token }}
@@ -546,9 +588,9 @@ jobs:
             echo "- workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "- catalog tooling: \`$CATALOG_COMMIT\`"
             echo
-            echo 'Both IPSWs passed exact size and SHA-256 verification. The payload source and destination Git trees match, canonical manifest and README checks pass, both commits are unsigned, and discovery no longer queues this destination build.'
+            echo "Both $INPUT_KIND inputs passed exact size and SHA-256 verification. The payload source and destination Git trees match, canonical manifest and README checks pass, both commits are unsigned, and discovery no longer queues this destination build."
             echo
-            echo 'Central catalog insertion remains a separate post-merge transition.'
+            echo 'This workflow merges the pull request once these checks pass. Central catalog insertion remains a separate post-merge transition.'
           } > "$body"
           pr_url="$(gh pr create \
             --repo "$GITHUB_REPOSITORY" \
@@ -564,13 +606,31 @@ jobs:
               >/dev/null
           printf 'url=%s\n' "$pr_url" >> "$GITHUB_OUTPUT"
 
-      - name: Publish review handoff
+      - name: Merge the validated pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ steps.pull_request.outputs.url }}
+        run: |
+          set -euo pipefail
+          # Squash like the reviewed merges before it; the source tag keeps the unsigned source.
+          gh pr merge "$PR_URL" \
+            --repo "$GITHUB_REPOSITORY" \
+            --squash \
+            --match-head-commit "$(git rev-parse HEAD)"
+          gh pr view "$PR_URL" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json state,mergeCommit | \
+            jq --exit-status \
+              'select(.state == "MERGED" and (.mergeCommit.oid | test("^[0-9a-f]{40}$")))' \
+              >/dev/null
+
+      - name: Publish merge handoff
         env:
           PR_URL: ${{ steps.pull_request.outputs.url }}
         run: |
           set -euo pipefail
           {
-            echo '## Generated pull request ready for review'
+            echo '## Generated pull request merged'
             echo
             echo "- $PREVIOUS_LABEL ($PREVIOUS_BUILD) to $NEXT_LABEL ($NEXT_BUILD)"
             echo "- permanent payload source tag: \`$SOURCE_TAG\`"
@@ -578,7 +638,31 @@ jobs:
             echo "- workflow run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "- pull request: $PR_URL"
             echo
-            echo 'Both IPSWs passed pinned size and SHA-256 checks. The source and destination Git trees match, canonical manifest and README checks pass, both commits are unsigned, and the generated edge is no longer queued by discovery.'
+            echo "Both $INPUT_KIND inputs passed pinned size and SHA-256 checks. The source and destination Git trees match, canonical manifest and README checks pass, both commits are unsigned, and the generated edge is no longer queued by discovery."
             echo
-            echo "Central catalog insertion remains a separate post-merge step because it must record this PR's final merge commit."
+            echo "Central catalog insertion follows on the catalog's own schedule because it must record this PR's final merge commit."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Pause generation until someone looks
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Shards poll every five minutes; without this a lasting failure would rerun the
+          # whole generation on every poll. Callers skip generation while this issue is open.
+          track="${TRACK_ID:-$GITHUB_REPOSITORY}"
+          edge="${PREVIOUS_BUILD:-unresolved} to ${NEXT_BUILD:-unresolved}"
+          gh label create generation-failed --repo "$GITHUB_REPOSITORY" --color B60205 \
+            --description 'Automatic generation is paused until this issue is closed' --force
+          {
+            echo "Generation of $track edge $edge ($INPUT_KIND inputs) failed in"
+            echo "https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
+            echo
+            echo 'Automatic generation for this repository is paused while this issue is open.'
+            echo 'Close it to let the next scheduled discovery retry.'
+          } > "$RUNNER_TEMP/failure.md"
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Generation failed: $track $edge" \
+            --label generation-failed \
+            --body-file "$RUNNER_TEMP/failure.md"

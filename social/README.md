@@ -14,10 +14,14 @@ Publishing needs no approval: merged catalog entries go out on their own.
 
 1. In `ipsw-diffs/catalog`, create a GitHub Actions [environment][environments] named
    `social`. Restrict deployments to the `main` branch and leave required reviewers off.
-2. Protect `main`: require pull requests with Code Owner review, dismiss stale approvals,
-   and don't allow anyone, administrators included, to bypass the rules or push directly.
-   The [CODEOWNERS file](../.github/CODEOWNERS) assigns `social/`, the workflows and
-   CODEOWNERS itself to `@blacktop`.
+2. Protect `main`: require pull requests and Code Owner review with zero required
+   approvals, dismiss stale approvals, and don't allow anyone, administrators included, to
+   bypass the rules or push directly. The [CODEOWNERS file](../.github/CODEOWNERS) assigns
+   `social/`, the workflows and CODEOWNERS itself to `@blacktop`, so changes there still
+   need that review. The catalog publication workflow's pull requests touch only catalog
+   data, so it merges them unattended. Don't require status checks: a pull request opened
+   with the job token starts no workflows, so a required check would never report. The
+   publication workflow runs the full check suite before it opens its pull request.
 
    This is what guards the credentials. Anyone who can land a change on `main` can read
    them, so keep write and admin access to account owners, and rotate a credential if

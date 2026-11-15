@@ -21,6 +21,9 @@ on:
       appledb_commit:
         description: Exact AppleDB commit used for release metadata and IPSW lookup
         value: ${{ jobs.detect.outputs.appledb_commit }}
+      edge-kind:
+        description: Input kind of the first queued edge, ipsw or ota; empty when current
+        value: ${{ jobs.detect.outputs.edge_kind }}
 
 permissions: {}
 
@@ -34,6 +37,7 @@ jobs:
       status: ${{ steps.discover.outputs.status }}
       result: ${{ steps.discover.outputs.result }}
       appledb_commit: ${{ steps.discover.outputs.appledb_commit }}
+      edge_kind: ${{ steps.discover.outputs.edge_kind }}
     steps:
       - name: Checkout shard
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -84,39 +88,26 @@ jobs:
             '.device | select(test("^[A-Za-z0-9][A-Za-z0-9,._-]*$"))' "$policy")"
           major="$(jq --exit-status --raw-output \
             '.major_version | select(type == "number" and floor == . and . > 0)' "$policy")"
+          ota_fallback="$(jq --raw-output \
+            'if has("ota_fallback") then .ota_fallback else false end' "$policy")"
+          case "$ota_fallback" in
+            true | false) ;;
+            *) echo "track policy ota_fallback must be a boolean" >&2; exit 1 ;;
+          esac
           {
             printf 'platform=%s\n' "$platform"
             printf 'device=%s\n' "$device"
             printf 'major=%s\n' "$major"
+            printf 'ota_fallback=%s\n' "$ota_fallback"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Query complete exact-track IPSW source inventory
+      - name: Query complete exact-track source inventories
         env:
-          PLATFORM: ${{ steps.selector.outputs.platform }}
+          APPLEDB_PLATFORM: ${{ steps.selector.outputs.platform }}
           DEVICE: ${{ steps.selector.outputs.device }}
-          MAJOR: ${{ steps.selector.outputs.major }}
-        run: |
-          set -euo pipefail
-          config_dir="$RUNNER_TEMP/ipsw-config"
-          mkdir -p "$config_dir"
-          touch "$config_dir/config.yaml"
-          ipsw --config "$config_dir/config.yaml" dl appledb \
-            --os "$PLATFORM" \
-            --device "$DEVICE" \
-            --version "$MAJOR." \
-            --type ipsw \
-            --json \
-            --no-color > "$RUNNER_TEMP/ipsw-sources.json"
-          if ! jq --exit-status '
-            type == "object" and .schema_version == 1 and
-            (.releases | type == "array" and length > 0)
-          ' "$RUNNER_TEMP/ipsw-sources.json" >/dev/null; then
-            echo 'Expected nonempty ipsw AppleDB schema_version=1 releases envelope' >&2
-            exit 1
-          fi
-          appledb_commit="$(git -C "$config_dir/appledb" rev-parse HEAD)"
-          [[ "$appledb_commit" =~ ^[0-9a-f]{40}$ ]]
-          printf '%s\n' "$appledb_commit" > "$RUNNER_TEMP/appledb-commit"
+          MAJOR_VERSION: ${{ steps.selector.outputs.major }}
+          OTA_FALLBACK: ${{ steps.selector.outputs.ota_fallback }}
+        run: bash catalog/scripts/query-source-inventories.sh
 
       - name: Queue every consecutive exact-track build
         id: discover
@@ -127,22 +118,29 @@ jobs:
         run: |
           set -euo pipefail
           appledb_commit="$(cat "$RUNNER_TEMP/appledb-commit")"
+          inventories=()
+          while IFS= read -r argument; do
+            inventories+=("$argument")
+          done < "$RUNNER_TEMP/discovery-args"
           result="$(uv run ipsw-diff-catalog discover \
             --policy "../shard/$POLICY_PATH" \
             --manifests-dir "../shard/$MANIFESTS_DIR" \
             --appledb-repo "$RUNNER_TEMP/ipsw-config/appledb" \
             --appledb-commit "$appledb_commit" \
-            --ipsw-sources "$RUNNER_TEMP/ipsw-sources.json")"
+            "${inventories[@]}")"
           status="$(printf '%s' "$result" | jq --exit-status --raw-output '.status')"
           if [ "$status" != current ] && [ "$status" != candidate ]; then
             echo "unsupported discovery status: $status" >&2
             exit 1
           fi
+          edge_kind="$(printf '%s' "$result" | jq --exit-status --raw-output \
+            'if .status == "candidate" then .edges[0].kind else "" end')"
           printf '%s\n' "$result" | tee "$RUNNER_TEMP/discovery.json"
           {
             printf 'status=%s\n' "$status"
             printf 'result=%s\n' "$result"
             printf 'appledb_commit=%s\n' "$appledb_commit"
+            printf 'edge_kind=%s\n' "$edge_kind"
           } >> "$GITHUB_OUTPUT"
 
       - name: Verify repositories unchanged

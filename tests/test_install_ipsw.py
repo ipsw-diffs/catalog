@@ -26,6 +26,8 @@ fi
     "scenario",
     [
         "success",
+        "macos-success",
+        "unsupported-runner",
         "api-failure",
         "prerelease",
         "missing-asset",
@@ -48,8 +50,10 @@ def test_install_latest_ipsw(tmp_path: Path, scenario: str) -> None:
         tar.addfile(member, io.BytesIO(payload))
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
     digest = "sha256:" + ("0" * 64 if scenario == "bad-checksum" else checksum)
+    platform = "macOS_arm64" if scenario == "macos-success" else "linux_x86_64"
+    asset_name = f"ipsw_3.1.720_{platform}.tar.gz"
     asset = {
-        "name": "ipsw_3.1.720_linux_x86_64.tar.gz",
+        "name": asset_name,
         "state": "uploaded",
         "digest": None if scenario == "missing-digest" else digest,
     }
@@ -77,17 +81,18 @@ fi
 printf 'attempt\\n' >> "$FIXTURE/download-attempts"
 test "$1 $2 $3" = "release download v3.1.720" || exit 9
 test "$4 $5" = "--repo blacktop/ipsw" || exit 9
-test "$6 $7" = "--pattern ipsw_3.1.720_linux_x86_64.tar.gz" || exit 9
+test "$6 $7" = "--pattern {asset_name}" || exit 9
 test "$8" = --output || exit 9
 test "${{10}}" = --clobber || exit 9
 output=$9
 {download_failures.get(scenario, ":")}
 cp "$FIXTURE/release.tar.gz" "$output"
 """,
-        "timeout": """
-test "$1" = 300 || exit 9
+        "perl": """
+test "$1" = -e || exit 9
+test "$3" = 300 || exit 9
 printf 'attempt\\n' >> "$FIXTURE/timed-attempts"
-shift
+shift 3
 exec "$@"
 """,
         "sleep": "exit 0\n",
@@ -109,12 +114,16 @@ exec "$@"
             "RUNNER_TEMP": str(tmp_path),
             "GITHUB_ENV": str(github_env),
             "GITHUB_PATH": str(github_path),
+            "RUNNER_OS": {"macos-success": "macOS", "unsupported-runner": "Windows"}.get(
+                scenario, "Linux"
+            ),
+            "RUNNER_ARCH": "ARM64" if scenario == "macos-success" else "X64",
         },
         capture_output=True,
         text=True,
         check=False,
     )
-    if scenario in {"success", "download-transient"}:
+    if scenario in {"success", "macos-success", "download-transient"}:
         assert result.returncode == 0, result.stderr
         assert github_env.read_text() == (f"IPSW_VERSION=3.1.720\nIPSW_ARCHIVE_SHA256={checksum}\n")
         assert (Path(github_path.read_text().strip()) / "ipsw").is_file()

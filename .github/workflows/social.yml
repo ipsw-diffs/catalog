@@ -96,7 +96,8 @@ jobs:
     if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    # Restricted to main, which requires Code Owner review; see social/README.md.
+    # Restricted to main, where changes to social/ and the workflows need Code Owner review;
+    # see social/README.md.
     environment: social
     permissions:
       contents: read

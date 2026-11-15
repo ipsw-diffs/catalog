@@ -5,6 +5,14 @@ set -euo pipefail
 : "${RUNNER_TEMP:?RUNNER_TEMP is required}"
 : "${GITHUB_ENV:?GITHUB_ENV is required}"
 : "${GITHUB_PATH:?GITHUB_PATH is required}"
+: "${RUNNER_OS:?RUNNER_OS is required}"
+: "${RUNNER_ARCH:?RUNNER_ARCH is required}"
+
+case "$RUNNER_OS/$RUNNER_ARCH" in
+  Linux/X64) platform=linux_x86_64 ;;
+  macOS/ARM64) platform=macOS_arm64 ;;
+  *) printf 'no ipsw release asset for runner %s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2; exit 1 ;;
+esac
 
 release="$(gh api repos/blacktop/ipsw/releases/latest)"
 tag="$(jq --exit-status --raw-output '
@@ -12,7 +20,7 @@ tag="$(jq --exit-status --raw-output '
   .tag_name | strings | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))
 ' <<< "$release")"
 version="${tag#v}"
-asset="ipsw_${version}_linux_x86_64.tar.gz"
+asset="ipsw_${version}_${platform}.tar.gz"
 digest="$(jq --exit-status --raw-output --arg asset "$asset" '
   [.assets[] | select(.name == $asset and .state == "uploaded")] |
   select(length == 1) | .[0].digest | strings |
@@ -26,8 +34,10 @@ max_attempts=5
 
 printf 'Installing ipsw %s (SHA-256 %s)\n' "$tag" "$sha256"
 # Use the job token: anonymous release downloads have failed with 504s during GitHub incidents.
+# macOS runners have no GNU timeout; an alarm set before exec still fires in the new program.
 for attempt in $(seq 1 "$max_attempts"); do
-  if timeout 300 gh release download "$tag" --repo blacktop/ipsw \
+  if perl -e 'alarm shift; exec @ARGV or die "exec: $!"' 300 \
+    gh release download "$tag" --repo blacktop/ipsw \
     --pattern "$asset" --output "$archive" --clobber; then
     break
   fi
