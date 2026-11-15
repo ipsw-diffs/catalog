@@ -8,7 +8,7 @@ import pytest
 from ipsw_diff_catalog.model import CatalogError, JsonObject
 from ipsw_diff_catalog.pallas import read_pallas
 
-_CAPTURED = Path(__file__).parent / "fixtures/pallas-v3.1.746-mac17-6-release.json"
+_CAPTURED = Path(__file__).parent / "fixtures/pallas-v3.1.747-mac17-6-release.json"
 _DIGEST = "a" * 40
 
 
@@ -48,19 +48,20 @@ def _read(*paths: Path):  # noqa: ANN202
     return read_pallas(paths, platform="macOS", device="Mac1,1", major=27)
 
 
-def test_read_captured_ipsw_v3746_envelope() -> None:
+def test_read_captured_ipsw_v3747_envelope() -> None:
     # Unmodified `ipsw dl ota --platform macos --device Mac17,6 --json` output, 2026-11-15.
+    # Apple serves 25G342 to the release audience under documentation ID macOS2673RC.
     inventory = read_pallas((_CAPTURED,), platform="macOS", device="Mac17,6", major=26)
 
     assert inventory.deferred == ()
     assert [build.build for build in inventory.builds] == ["25G342"]
     build = inventory.builds[0]
     assert build.record == {
-        "version": "26.7.3 RC",
+        "version": "26.7.3",
         "build": "25G342",
         "released": "2026-11-09",
         "beta": False,
-        "rc": True,
+        "rc": False,
     }
     assert build.source["hashes"] == {
         "sha2-256": "8817c30dcc1b144a283f7bf1dc0867a969d1d9185d10a6e41ca075aaeaa6f18c"
