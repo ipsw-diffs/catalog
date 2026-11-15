@@ -292,11 +292,12 @@ Full comparison and integrity details are in the version browser below.
 </details>
 
 <details>
-<summary><strong>macOS 26</strong> · 10 diffs</summary>
+<summary><strong>macOS 26</strong> · 11 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
 | `Mac17,6` | [26.7.2 (25G332) → 26.7.3 RC (25G416)](https://github.com/ipsw-diffs/macos-26/blob/5a53447f93da7f4d528bd7f13a285389ce291d51/diffs/26_7_2_25G332_vs_26_7_3_25G416/README.md) | `5a4b01f08d1d` · 759 files · 651,522 bytes · [manifest](https://github.com/ipsw-diffs/macos-26/blob/5a53447f93da7f4d528bd7f13a285389ce291d51/manifests/26_7_2_25G332_vs_26_7_3_25G416.json) |
+| `Mac17,6` | [26.7.3 RC (25G416) → 26.7.3 (25G342)](https://github.com/ipsw-diffs/macos-26/blob/f51903d39fd8940e794edd2aff5dcbc43ed88012/diffs/26_7_3_25G416_vs_26_7_3_25G342/README.md) | `3a2725cf7f13` · 764 files · 726,482 bytes · [manifest](https://github.com/ipsw-diffs/macos-26/blob/f51903d39fd8940e794edd2aff5dcbc43ed88012/manifests/26_7_3_25G416_vs_26_7_3_25G342.json) |
 | `Mac17,6` | [26.6.2 RC (25G82) → 26.6.2 (25G83)](https://github.com/ipsw-diff/macos-26/blob/12e4344c637c6c7c6930df32587838756b392485/diffs/26_6_2_25G82_vs_26_6_2_25G83/README.md) | `ca4dd48e350b` · 11 files · 14,132 bytes · [manifest](https://github.com/ipsw-diff/macos-26/blob/12e4344c637c6c7c6930df32587838756b392485/manifests/26_6_2_25G82_vs_26_6_2_25G83.json) |
 | `UniversalMac` | [26.6.1 (25G76) → 26.6.2 RC (25G82)](https://github.com/ipsw-diff/macos-26/blob/21b19bf3a6e32c240be5ffd7abc3b78ce2c38a5b/diffs/26_6_1_25G76_vs_26_6_2_25G82/README.md) | `c0a748be29af` · 612 files · 1,043,331 bytes · [manifest](https://github.com/ipsw-diff/macos-26/blob/21b19bf3a6e32c240be5ffd7abc3b78ce2c38a5b/manifests/26_6_1_25G76_vs_26_6_2_25G82.json) |
 | `UniversalMac` | [26.6 (25G72) → 26.6.1 (25G76)](https://github.com/ipsw-diff/macos-26/blob/21b19bf3a6e32c240be5ffd7abc3b78ce2c38a5b/diffs/26_6_25G72_vs_26_6_1_25G76/README.md) | `1a9539ae0120` · 21 files · 155,835 bytes · [manifest](https://github.com/ipsw-diff/macos-26/blob/21b19bf3a6e32c240be5ffd7abc3b78ce2c38a5b/manifests/26_6_25G72_vs_26_6_1_25G76.json) |
@@ -310,11 +311,12 @@ Full comparison and integrity details are in the version browser below.
 </details>
 
 <details>
-<summary><strong>macOS 15</strong> · 14 diffs</summary>
+<summary><strong>macOS 15</strong> · 15 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
 | `Mac16,1` | [15.8.2 (24H232) → 15.8.3 RC (24H314)](https://github.com/ipsw-diffs/macos-15/blob/4c67099169013e8802435a5a55f8ac2ccd4e65b5/diffs/15_8_2_24H232_vs_15_8_3_24H314/README.md) | `da1e845f2b67` · 2,388 files · 16,870,615 bytes · [manifest](https://github.com/ipsw-diffs/macos-15/blob/4c67099169013e8802435a5a55f8ac2ccd4e65b5/manifests/15_8_2_24H232_vs_15_8_3_24H314.json) |
+| `Mac16,1` | [15.8.3 RC (24H314) → 15.8.3 (24H241)](https://github.com/ipsw-diffs/macos-15/blob/f7991db819ea689445ff64a19696d7f8e963097c/diffs/15_8_3_24H314_vs_15_8_3_24H241/README.md) | `a6647617066a` · 2,393 files · 16,934,566 bytes · [manifest](https://github.com/ipsw-diffs/macos-15/blob/f7991db819ea689445ff64a19696d7f8e963097c/manifests/15_8_3_24H314_vs_15_8_3_24H241.json) |
 | `Mac16,1` | [15.6 (24G84) → 15.6.1 (24G90)](https://github.com/ipsw-diff/macos-15/blob/06356975719c8c5868dc3bc958b091952cefc7e8/diffs/15_6_24G84_vs_15_6_1_24G90/README.md) | `f1b791ff2d95` · 9 files · 7,811 bytes · [manifest](https://github.com/ipsw-diff/macos-15/blob/06356975719c8c5868dc3bc958b091952cefc7e8/manifests/15_6_24G84_vs_15_6_1_24G90.json) |
 | `Mac16,1` | [15.6 beta 3 (24G5074c) → 15.6 (24G84)](https://github.com/ipsw-diff/macos-15/blob/06356975719c8c5868dc3bc958b091952cefc7e8/diffs/15_6_24G5074c_vs_15_6_24G84/README.md) | `8ffb089a2972` · 1,205 files · 3,309,205 bytes · [manifest](https://github.com/ipsw-diff/macos-15/blob/06356975719c8c5868dc3bc958b091952cefc7e8/manifests/15_6_24G5074c_vs_15_6_24G84.json) |
 | `Mac16,1` | [15.6 beta 2 (24G5065c) → 15.6 beta 3 (24G5074c)](https://github.com/ipsw-diff/macos-15/blob/04840dc548b3f549b1df70f13ea8936e138ffb03/diffs/15_6_24G5065c_vs_15_6_24G5074c/README.md) | `713b130d22eb` · 625 files · 3,876,756 bytes · [manifest](https://github.com/ipsw-diff/macos-15/blob/04840dc548b3f549b1df70f13ea8936e138ffb03/manifests/15_6_24G5065c_vs_15_6_24G5074c.json) |

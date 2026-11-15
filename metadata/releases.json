@@ -2082,6 +2082,16 @@
     },
     {
       "beta": false,
+      "build": "24H241",
+      "channel": "release",
+      "display_version": "15.8.3",
+      "platform": "macOS",
+      "rc": false,
+      "released": "2026-11-09",
+      "source_path": "osFiles/macOS/24x - 15.x/24H241.json"
+    },
+    {
+      "beta": false,
       "build": "24H314",
       "channel": "rc",
       "display_version": "15.8.3 RC",
@@ -2159,6 +2169,16 @@
       "rc": false,
       "released": "2026-10-26",
       "source_path": "osFiles/macOS/25x - 26.x/25G332.json"
+    },
+    {
+      "beta": false,
+      "build": "25G342",
+      "channel": "release",
+      "display_version": "26.7.3",
+      "platform": "macOS",
+      "rc": false,
+      "released": "2026-11-09",
+      "source_path": "osFiles/macOS/25x - 26.x/25G342.json"
     },
     {
       "beta": false,
