@@ -28,8 +28,8 @@ discover() {
     inventories+=("$argument")
   done < "$RUNNER_TEMP/discovery-args"
   uv run --directory catalog --frozen ipsw-diff-catalog discover \
-    --policy "../shard/$POLICY_PATH" \
-    --manifests-dir "../shard/$MANIFESTS_DIR" \
+    --policy "$PWD/shard/$POLICY_PATH" \
+    --manifests-dir "$PWD/shard/$MANIFESTS_DIR" \
     --appledb-repo "$RUNNER_TEMP/ipsw-config/appledb" \
     --appledb-commit "$(cat "$RUNNER_TEMP/appledb-commit")" \
     "${inventories[@]}"
@@ -37,8 +37,12 @@ discover() {
 
 generation_pending() {
   local build="$1" paused
-  paused="$(gh issue list --repo "$GITHUB_REPOSITORY" --label generation-failed \
-    --state open --json number --jq length)" || return 0
+  if ! paused="$(gh issue list --repo "$GITHUB_REPOSITORY" --label generation-failed \
+    --state open --json number --jq length)"; then
+    echo "::warning::could not read $GITHUB_REPOSITORY generation-failed issues, so build" \
+      "$build stays queued; the shard needs issues enabled"
+    return 0
+  fi
   [ "$paused" != 0 ] && return 0
   git -C shard ls-remote --exit-code --heads origin "refs/heads/generated/$TRACK_ID-$build" \
     >/dev/null 2>&1

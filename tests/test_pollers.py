@@ -40,7 +40,7 @@ def _poll_discovery(
     tmp_path: Path,
     *,
     decision: object | None,
-    paused: str = "0",
+    paused: str | None = "0",
     dispatch_fails: bool = False,
     generated_branch: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
@@ -63,12 +63,17 @@ def _poll_discovery(
     mocks = tmp_path / "mocks"
     mocks.mkdir()
     _mock(mocks, "uv", 'cat "$FIXTURE/decision.json"\n')
+    issue_list = (
+        "echo 'the repository has disabled issues' >&2; exit 1"
+        if paused is None
+        else f"printf '%s\\n' {paused}"
+    )
     _mock(
         mocks,
         "gh",
         f"""
 case "$1 $2" in
-  "issue list") printf '%s\\n' {paused} ;;
+  "issue list") {issue_list} ;;
   "workflow run")
     printf '%s\\n' "$3" >> "$FIXTURE/dispatches"
     {"exit 1" if dispatch_fails else ":"} ;;
@@ -128,6 +133,15 @@ def test_discovery_poller_skips_a_build_with_a_generated_branch(tmp_path: Path) 
 
     assert result.returncode == 0, result.stderr
     assert dispatches == []
+
+
+def test_discovery_poller_warns_when_it_cannot_read_the_pause_issue(tmp_path: Path) -> None:
+    result, dispatches = _poll_discovery(tmp_path, decision=CANDIDATE, paused=None)
+
+    assert result.returncode == 0, result.stderr
+    assert dispatches == []
+    assert "::warning::could not read ipsw-diffs/macos-26 generation-failed issues" in result.stdout
+    assert "build B2 stays queued" in result.stdout
 
 
 def test_discovery_poller_survives_failed_discovery(tmp_path: Path) -> None:
