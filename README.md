@@ -313,10 +313,11 @@ Full comparison and integrity details are in the version browser below.
 </details>
 
 <details>
-<summary><strong>macOS 15</strong> · 15 diffs</summary>
+<summary><strong>macOS 15</strong> · 16 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
+| `Mac16,1` | [15.8.3 (24H241) → 15.8.4 RC (24H319)](https://github.com/ipsw-diffs/macos-15/blob/1931dc551e746c4923b6f3ec83d01c680d54fac2/diffs/15_8_3_24H241_vs_15_8_4_24H319/README.md) | `6ff9e1895512` · 2,536 files · 17,243,289 bytes · [manifest](https://github.com/ipsw-diffs/macos-15/blob/1931dc551e746c4923b6f3ec83d01c680d54fac2/manifests/15_8_3_24H241_vs_15_8_4_24H319.json) |
 | `Mac16,1` | [15.8.2 (24H232) → 15.8.3 RC (24H314)](https://github.com/ipsw-diffs/macos-15/blob/4c67099169013e8802435a5a55f8ac2ccd4e65b5/diffs/15_8_2_24H232_vs_15_8_3_24H314/README.md) | `da1e845f2b67` · 2,388 files · 16,870,615 bytes · [manifest](https://github.com/ipsw-diffs/macos-15/blob/4c67099169013e8802435a5a55f8ac2ccd4e65b5/manifests/15_8_2_24H232_vs_15_8_3_24H314.json) |
 | `Mac16,1` | [15.8.3 RC (24H314) → 15.8.3 (24H241)](https://github.com/ipsw-diffs/macos-15/blob/f7991db819ea689445ff64a19696d7f8e963097c/diffs/15_8_3_24H314_vs_15_8_3_24H241/README.md) | `a6647617066a` · 2,393 files · 16,934,566 bytes · [manifest](https://github.com/ipsw-diffs/macos-15/blob/f7991db819ea689445ff64a19696d7f8e963097c/manifests/15_8_3_24H314_vs_15_8_3_24H241.json) |
 | `Mac16,1` | [15.6 (24G84) → 15.6.1 (24G90)](https://github.com/ipsw-diff/macos-15/blob/06356975719c8c5868dc3bc958b091952cefc7e8/diffs/15_6_24G84_vs_15_6_1_24G90/README.md) | `f1b791ff2d95` · 9 files · 7,811 bytes · [manifest](https://github.com/ipsw-diff/macos-15/blob/06356975719c8c5868dc3bc958b091952cefc7e8/manifests/15_6_24G84_vs_15_6_1_24G90.json) |

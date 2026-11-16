@@ -1,0 +1,34 @@
+{
+  "destination": {
+    "commit": "1931dc551e746c4923b6f3ec83d01c680d54fac2",
+    "entrypoint": "diffs/15_8_3_24H241_vs_15_8_4_24H319/README.md",
+    "manifest_path": "manifests/15_8_3_24H241_vs_15_8_4_24H319.json",
+    "payload_path": "diffs/15_8_3_24H241_vs_15_8_4_24H319",
+    "repository": "https://github.com/ipsw-diffs/macos-15"
+  },
+  "device": "Mac16,1",
+  "from": {
+    "build": "24H241",
+    "input": "Mac16,1_15.8.3_24H241_OTA.zip",
+    "version": "15.8.3"
+  },
+  "id": "macos-15.8.4-24H241-24H319",
+  "integrity": {
+    "git_tree": "6ff9e189551209f3f713fd85676b2ecbaa854ca3",
+    "logical_bytes": 17243289,
+    "tracked_file_count": 2536
+  },
+  "major_version": 15,
+  "platform": "macOS",
+  "schema_version": 1,
+  "source": {
+    "commit": "aa513208a740594c8229c74bbbd6c97d3bc99653",
+    "path": "15_8_3_24H241_vs_15_8_4_24H319",
+    "repository": "https://github.com/ipsw-diffs/macos-15"
+  },
+  "to": {
+    "build": "24H319",
+    "input": "Mac16,1_15.8.4_24H319_OTA.zip",
+    "version": "15.8.4"
+  }
+}
