@@ -2111,6 +2111,16 @@
       "source_path": "osFiles/macOS/24x - 15.x/24H314.json"
     },
     {
+      "beta": false,
+      "build": "24H319",
+      "channel": "rc",
+      "display_version": "15.8.4 RC",
+      "platform": "macOS",
+      "rc": true,
+      "released": "2026-11-16",
+      "source_path": "osFiles/macOS/24x - 15.x/24H319.json"
+    },
+    {
       "beta": true,
       "build": "25D5087f",
       "channel": "beta",
