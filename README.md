@@ -13,25 +13,26 @@ Full comparison and integrity details are in the version browser below.
 
 ### iOS 27
 
+- [27.3 beta 2 (`24C5049d`)](https://github.com/ipsw-diffs/ios-27/blob/8b8628247947261509a20035b71a9f3dcacef75c/diffs/27_3_24C5037i_vs_27_3_24C5049d/README.md) ← 27.3 beta (`24C5037i`)
 - [27.3 beta (`24C5037i`)](https://github.com/ipsw-diffs/ios-27/blob/480ba8fed238ad02483ca4750104d45909522088/diffs/27_2_24B119_vs_27_3_24C5037i/README.md) ← 27.2 (`24B119`)
 - [27.2.1 (`24B156`)](https://github.com/ipsw-diffs/ios-27/blob/d676cc4beb225712dc689a7bf14db7a4172a38fb/diffs/27_2_24B119_vs_27_2_1_24B156/README.md) ← 27.2 (`24B119`)
-- [27.2 (`24B119`)](https://github.com/ipsw-diffs/ios-27/blob/3ed694b15d65239c36d0a97a5b5f6fbd72cf26e4/diffs/27_2_24B115_vs_27_2_24B119/README.md) ← 27.2 RC (`24B115`)
 
 ### macOS 27
 
+- [27.3 beta 2 (`26C5047e`)](https://github.com/ipsw-diffs/macos-27/blob/510b19ee40959f3861d72d45a2ac728f6876b9c8/diffs/27_3_26C5035r_vs_27_3_26C5047e/README.md) ← 27.3 beta (`26C5035r`)
 - [27.3 beta (`26C5035r`)](https://github.com/ipsw-diffs/macos-27/blob/727090bd88949813020653cec4f78ca2a3feaf46/diffs/27_2_26B123_vs_27_3_26C5035r/README.md) ← 27.2 (`26B123`)
 - [27.2.1 (`26B131`)](https://github.com/ipsw-diffs/macos-27/blob/e745740461a1a985189c2d301496561ef88e459b/diffs/27_2_26B123_vs_27_2_1_26B131/README.md) ← 27.2 (`26B123`)
-- [27.2 (`26B123`)](https://github.com/ipsw-diffs/macos-27/blob/ff4bb34f70f4b8d2868f446fa138ed0ce1f0a9e4/diffs/27_2_26B118_vs_27_2_26B123/README.md) ← 27.2 RC (`26B118`)
 
 ## Browse all diffs
 
 ### iOS
 
 <details>
-<summary><strong>iOS 27</strong> · 19 diffs</summary>
+<summary><strong>iOS 27</strong> · 20 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
+| `iPhone18,1` | [27.3 beta (24C5037i) → 27.3 beta 2 (24C5049d)](https://github.com/ipsw-diffs/ios-27/blob/8b8628247947261509a20035b71a9f3dcacef75c/diffs/27_3_24C5037i_vs_27_3_24C5049d/README.md) | `95b039bbf6a2` · 4,849 files · 39,209,105 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/8b8628247947261509a20035b71a9f3dcacef75c/manifests/27_3_24C5037i_vs_27_3_24C5049d.json) |
 | `iPhone18,1` | [27.2 (24B119) → 27.3 beta (24C5037i)](https://github.com/ipsw-diffs/ios-27/blob/480ba8fed238ad02483ca4750104d45909522088/diffs/27_2_24B119_vs_27_3_24C5037i/README.md) | `b48826a1932b` · 3,541 files · 111,472,202 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/480ba8fed238ad02483ca4750104d45909522088/manifests/27_2_24B119_vs_27_3_24C5037i.json) |
 | `iPhone18,1` | [27.2 (24B119) → 27.2.1 (24B156)](https://github.com/ipsw-diffs/ios-27/blob/d676cc4beb225712dc689a7bf14db7a4172a38fb/diffs/27_2_24B119_vs_27_2_1_24B156/README.md) | `9bc413b33db3` · 83 files · 137,727 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/d676cc4beb225712dc689a7bf14db7a4172a38fb/manifests/27_2_24B119_vs_27_2_1_24B156.json) |
 | `iPhone18,1` | [27.2 RC (24B115) → 27.2 (24B119)](https://github.com/ipsw-diffs/ios-27/blob/3ed694b15d65239c36d0a97a5b5f6fbd72cf26e4/diffs/27_2_24B115_vs_27_2_24B119/README.md) | `79ec51373162` · 23 files · 223,661 bytes · [manifest](https://github.com/ipsw-diffs/ios-27/blob/3ed694b15d65239c36d0a97a5b5f6fbd72cf26e4/manifests/27_2_24B115_vs_27_2_24B119.json) |
@@ -266,10 +267,11 @@ Full comparison and integrity details are in the version browser below.
 ### macOS
 
 <details>
-<summary><strong>macOS 27</strong> · 18 diffs</summary>
+<summary><strong>macOS 27</strong> · 19 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
+| `Mac18,5` | [27.3 beta (26C5035r) → 27.3 beta 2 (26C5047e)](https://github.com/ipsw-diffs/macos-27/blob/510b19ee40959f3861d72d45a2ac728f6876b9c8/diffs/27_3_26C5035r_vs_27_3_26C5047e/README.md) | `e72a03e7ef2b` · 4,425 files · 34,396,899 bytes · [manifest](https://github.com/ipsw-diffs/macos-27/blob/510b19ee40959f3861d72d45a2ac728f6876b9c8/manifests/27_3_26C5035r_vs_27_3_26C5047e.json) |
 | `Mac18,5` | [27.2 (26B123) → 27.3 beta (26C5035r)](https://github.com/ipsw-diffs/macos-27/blob/727090bd88949813020653cec4f78ca2a3feaf46/diffs/27_2_26B123_vs_27_3_26C5035r/README.md) | `1c61d6b0245c` · 1,913 files · 106,155,101 bytes · [manifest](https://github.com/ipsw-diffs/macos-27/blob/727090bd88949813020653cec4f78ca2a3feaf46/manifests/27_2_26B123_vs_27_3_26C5035r.json) |
 | `Mac18,5` | [27.2 (26B123) → 27.2.1 (26B131)](https://github.com/ipsw-diffs/macos-27/blob/e745740461a1a985189c2d301496561ef88e459b/diffs/27_2_26B123_vs_27_2_1_26B131/README.md) | `2d90b8f0c025` · 189 files · 188,376 bytes · [manifest](https://github.com/ipsw-diffs/macos-27/blob/e745740461a1a985189c2d301496561ef88e459b/manifests/27_2_26B123_vs_27_2_1_26B131.json) |
 | `Mac18,5` | [27.2 RC (26B118) → 27.2 (26B123)](https://github.com/ipsw-diffs/macos-27/blob/ff4bb34f70f4b8d2868f446fa138ed0ce1f0a9e4/diffs/27_2_26B118_vs_27_2_26B123/README.md) | `01684941d0c2` · 12 files · 153,956 bytes · [manifest](https://github.com/ipsw-diffs/macos-27/blob/ff4bb34f70f4b8d2868f446fa138ed0ce1f0a9e4/manifests/27_2_26B118_vs_27_2_26B123.json) |
