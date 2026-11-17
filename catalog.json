@@ -7176,6 +7176,40 @@
     },
     {
       "destination": {
+        "commit": "43325e85d0311d1d430018651968f7eaf4110d66",
+        "entrypoint": "diffs/26_7_3_25G342_vs_26_7_4_25G422/README.md",
+        "manifest_path": "manifests/26_7_3_25G342_vs_26_7_4_25G422.json",
+        "payload_path": "diffs/26_7_3_25G342_vs_26_7_4_25G422",
+        "repository": "https://github.com/ipsw-diffs/macos-26"
+      },
+      "device": "Mac17,6",
+      "from": {
+        "build": "25G342",
+        "input": "Mac17,6_26.7.3_25G342_OTA.zip",
+        "version": "26.7.3"
+      },
+      "id": "macos-26.7.4-25G342-25G422",
+      "integrity": {
+        "git_tree": "11dd8874d1eef46c11c24c43c8634f72f1c8995f",
+        "logical_bytes": 1299607,
+        "tracked_file_count": 1051
+      },
+      "major_version": 26,
+      "platform": "macOS",
+      "schema_version": 1,
+      "source": {
+        "commit": "b9b7ff8db19ad521fc2f3ad1349b394298b6405e",
+        "path": "26_7_3_25G342_vs_26_7_4_25G422",
+        "repository": "https://github.com/ipsw-diffs/macos-26"
+      },
+      "to": {
+        "build": "25G422",
+        "input": "Mac17,6_26.7.4_25G422_OTA.zip",
+        "version": "26.7.4"
+      }
+    },
+    {
+      "destination": {
         "commit": "34ab75014b9350d2496064da4e8193a491568289",
         "entrypoint": "diffs/15_0_24A5279h__vs_15_0_24A5289g/TOC.md",
         "manifest_path": "manifests/15_0_24A5279h__vs_15_0_24A5289g.json",
