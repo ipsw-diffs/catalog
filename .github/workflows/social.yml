@@ -32,7 +32,7 @@ concurrency:
 
 env:
   # blacktop/xpost, pinned; bump deliberately after a green `X live check` there.
-  XPOST_COMMIT: 3ce9d4d00186bf0adddf2ca2847888030dc89741
+  XPOST_COMMIT: 420bcfa879784135e100d0df1d9e019478598e95
   PUBLISH_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'publish' }}
 
 jobs:
