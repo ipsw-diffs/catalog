@@ -2211,6 +2211,16 @@
       "source_path": "osFiles/macOS/25x - 26.x/25G416.json"
     },
     {
+      "beta": false,
+      "build": "25G422",
+      "channel": "rc",
+      "display_version": "26.7.4 RC",
+      "platform": "macOS",
+      "rc": true,
+      "released": "2026-11-16",
+      "source_path": "osFiles/macOS/25x - 26.x/25G422.json"
+    },
+    {
       "beta": true,
       "build": "25G5028f",
       "channel": "beta",
@@ -2493,7 +2503,7 @@
   ],
   "schema_version": 1,
   "source": {
-    "commit": "ad640630ebf2a64dd40f723247114b7d8e31c3a3",
+    "commit": "3d0ac5063488dd6cc3f302f2e4740020e98e6b7b",
     "repository": "https://github.com/littlebyteorg/appledb"
   }
 }

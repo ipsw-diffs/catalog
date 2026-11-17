@@ -294,10 +294,11 @@ Full comparison and integrity details are in the version browser below.
 </details>
 
 <details>
-<summary><strong>macOS 26</strong> · 11 diffs</summary>
+<summary><strong>macOS 26</strong> · 12 diffs</summary>
 
 | Device | Comparison | Integrity |
 | --- | --- | --- |
+| `Mac17,6` | [26.7.3 (25G342) → 26.7.4 RC (25G422)](https://github.com/ipsw-diffs/macos-26/blob/43325e85d0311d1d430018651968f7eaf4110d66/diffs/26_7_3_25G342_vs_26_7_4_25G422/README.md) | `11dd8874d1ee` · 1,051 files · 1,299,607 bytes · [manifest](https://github.com/ipsw-diffs/macos-26/blob/43325e85d0311d1d430018651968f7eaf4110d66/manifests/26_7_3_25G342_vs_26_7_4_25G422.json) |
 | `Mac17,6` | [26.7.2 (25G332) → 26.7.3 RC (25G416)](https://github.com/ipsw-diffs/macos-26/blob/5a53447f93da7f4d528bd7f13a285389ce291d51/diffs/26_7_2_25G332_vs_26_7_3_25G416/README.md) | `5a4b01f08d1d` · 759 files · 651,522 bytes · [manifest](https://github.com/ipsw-diffs/macos-26/blob/5a53447f93da7f4d528bd7f13a285389ce291d51/manifests/26_7_2_25G332_vs_26_7_3_25G416.json) |
 | `Mac17,6` | [26.7.3 RC (25G416) → 26.7.3 (25G342)](https://github.com/ipsw-diffs/macos-26/blob/f51903d39fd8940e794edd2aff5dcbc43ed88012/diffs/26_7_3_25G416_vs_26_7_3_25G342/README.md) | `3a2725cf7f13` · 764 files · 726,482 bytes · [manifest](https://github.com/ipsw-diffs/macos-26/blob/f51903d39fd8940e794edd2aff5dcbc43ed88012/manifests/26_7_3_25G416_vs_26_7_3_25G342.json) |
 | `Mac17,6` | [26.6.2 RC (25G82) → 26.6.2 (25G83)](https://github.com/ipsw-diff/macos-26/blob/12e4344c637c6c7c6930df32587838756b392485/diffs/26_6_2_25G82_vs_26_6_2_25G83/README.md) | `ca4dd48e350b` · 11 files · 14,132 bytes · [manifest](https://github.com/ipsw-diff/macos-26/blob/12e4344c637c6c7c6930df32587838756b392485/manifests/26_6_2_25G82_vs_26_6_2_25G83.json) |
